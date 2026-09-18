@@ -2,7 +2,7 @@
 
 Review code without leaving the terminal.
 
-`crv` renders and navigates diffs, takes review notes on lines, shows what
+`crv` renders and navigates diffs, drafts review comments on lines, shows what
 your teammates already said, and submits the whole thing to GitHub as one
 review — without leaving the terminal.
 
@@ -40,8 +40,8 @@ including an enterprise one.
 ### The queue
 
 A bare `crv` lists what is waiting on you, across every repository, with CI
-status, age, and how many unsent notes you already have on each. `enter` opens
-one, `t` switches to your own pull requests, `r` refreshes.
+status, age, and how many unsent drafts you already have on each. `enter` (or a double click)
+opens one, `t` switches to your own pull requests, `r` refreshes.
 
 The list is one GraphQL request and is cached for five minutes; a failed
 refresh shows the cached list rather than an empty screen. Diffs are never
@@ -114,7 +114,7 @@ well, for terminals that ignore OSC 52.
 | `--no-untracked` | exclude untracked files |
 | `--width <n>` | output width when stdout is not a terminal |
 | `--host <name>` | GitHub hostname; defaults to gh's own configuration |
-| `--export markdown` | print this review's notes and exit |
+| `--export markdown` | print this review's drafts and exit |
 | `--limit <n>` | how many pull requests the queue lists (default 30) |
 | `--config` | print the resolved configuration and exit |
 | `--init-config` | write a starter configuration file and exit |
@@ -138,8 +138,8 @@ down it:
 Add and delete are stated three times over — edge marker, sign, row tint — so
 the diff still reads with colour disabled or unperceived, and so that focusing
 a row can lift its tone without erasing what kind of line it is. A `›` at the
-right edge means the line continues past it; `h` and `l` scroll to see it.
-Notes and review comments wrap to the terminal instead, hanging under their
+right edge means the line continues past it; `h` and `l` (or `shift`+wheel)
+scroll to see it. Drafts and review comments wrap to the terminal instead, hanging under their
 author's name: one line where they sit, expanded while the cursor is on them,
 so a conversation never buries the code it is about.
 
@@ -196,30 +196,30 @@ crv --theme light .               # or just this run
 roles, syntax muting and the golden tests — read it before changing how any of
 this looks.
 
-## Notes and reviews
+## Drafts and reviews
 
-Notes are stored outside the repository — under `~/.config/crv`, or
+Drafts are stored outside the repository — under `~/.config/crv`, or
 `$XDG_CONFIG_HOME/crv` if that is set — so they never pollute a worktree that
 is shared or reset. They are keyed by pull
 request number, or by branch for local work, so an agent rewriting files
 underneath you does not orphan them.
 
-Each note records the blob hash of the file it was written against. When the
-file changes, the note is shown as **needs re-anchor** and detached from its
+Each draft records the blob hash of the file it was written against. When the
+file changes, the draft is shown as **needs re-anchor** and detached from its
 line rather than pointing at a line that has since moved. Press `m`, navigate
-to its new line, and press `enter`; press `v` first to select a range. A draft
+to its new line, and press `enter`; press `v` first to make a selection. A draft
 that needs re-anchoring cannot be submitted. The same change detection applies
 to a file marked reviewed: it keeps its tick and gains a `~`, because silently
 unticking would hide that you had already read it.
 
 Nothing is sent anywhere until you press `S`. GitHub reviews are atomic, so
-every note is posted as a single review with one event — comment, approve, or
+every draft is posted as a single review with one event — comment, approve, or
 request changes — rather than as a stream of separate comments. Once submitted,
 the local copies are dropped: GitHub owns them from then on, which is what stops
 two versions of the same review from disagreeing.
 
 For a local review with no pull request to post to, `crv --export markdown`
-prints the notes for pasting wherever they need to go.
+prints the drafts for pasting wherever they need to go.
 
 ### Comments and sync
 

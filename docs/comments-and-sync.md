@@ -5,7 +5,7 @@ state, and the age of the displayed pull request snapshot.
 
 ## Terms
 
-- A **draft** is an unsent local review note owned by `crv`.
+- A **draft** is an unsent local review comment owned by `crv`.
 - **Needs re-anchor** means a draft's file blob or path no longer matches the
   current diff. Its saved line coordinates cannot be trusted.
 - A **thread** is a GitHub review discussion: one root comment and its replies.
@@ -38,7 +38,8 @@ session.
 Each comment is one line when unfocused. Under the cursor it preserves line
 breaks and indentation, wraps to the terminal, and expands to at most eight
 lines. An overflow marker indicates more content. `enter` opens a full-height
-scrollable view; `j` and `k` scroll it, and `enter`, `esc`, or `q` closes it.
+scrollable view; `j` and `k` or the mouse wheel scroll it, and `enter`,
+`esc`, or `q` closes it.
 
 ## Sync
 

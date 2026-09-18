@@ -15,7 +15,7 @@ colour turned off, muted by a low-contrast terminal, or unperceived.
 git / gh ─▶ diffparse ─▶ render.Build ─▶ Document{Rows} ─▶ Renderer.Render ─▶ string
                              ▲                                   ▲
                            Overlay                             Theme
-                    notes, comments, marks              colours and muting
+                   drafts, comments, marks              colours and muting
 ```
 
 `Build` is structure: how many rows there are and what each one is. `Render`
@@ -53,7 +53,7 @@ line numbers still lines up.
 | --- | --- |
 | `▎` | an added or deleted line |
 | `┃` | the cursor row |
-| `▌` | a note or a review comment |
+| `▌` | a draft or a review comment |
 | `+` / `−` | added / deleted |
 | `›` | the line continues past the right edge |
 | `✓` / `~` | reviewed / reviewed then changed underneath you |
@@ -196,7 +196,7 @@ that it never changes how many code rows there are.
 
 ## Annotations
 
-Notes, review comments and thread summaries are all `RowNote`, and all of them
+Drafts, review comments and thread summaries are all `RowNote`, and all of them
 wrap at paint time:
 
 ```

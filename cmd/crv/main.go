@@ -112,7 +112,7 @@ flags:
   --no-untracked     exclude untracked files from the working-tree diff
   --width <n>        output width when not attached to a terminal
   --limit <n>        how many pull requests the queue lists (default 30)
-  --export markdown  print the saved notes for this review and exit
+  --export markdown  print the saved drafts for this review and exit
   --config           print the resolved configuration and exit
   --init-config      write a starter configuration file and exit
   --version          print version and exit
@@ -124,7 +124,7 @@ configuration:
     1. the flags above
     2. environment: CRV_HOST, CRV_THEME, CRV_SYNTAX, CRV_DENSITY,
        CRV_LAYOUT, CRV_EDITOR, CRV_WIDTH, CRV_UNTRACKED, CRV_COLOR,
-       NO_COLOR
+       CRV_MOUSE, NO_COLOR
     3. %s in the repository being reviewed
     4. %s
 
@@ -143,13 +143,14 @@ configuration:
     editor = "hx"                 # default: $VISUAL, then $EDITOR, then vi
     untracked = true              # include untracked files in crv .
     color = true
+    mouse = true                  # false leaves clicks and drags to the terminal
     width = 120                   # used when output is piped
 
   Set host in a repository's %s to review on an enterprise host
   without changing anything globally.
 
   `+"`crv --config`"+` prints which settings are in effect and which files were
-  read. Review notes are kept in:
+  read. Review drafts are kept in:
     %s
 
 `, config.RepoFile, userPath, config.RepoFile, notesDir)
@@ -188,7 +189,7 @@ func registerFlags(fs *flag.FlagSet) *options {
 	fs.StringVar(&o.syntax, "syntax", "", "chroma style for code")
 	fs.StringVar(&o.density, "density", "", "row density: comfortable or compact")
 	fs.StringVar(&o.layout, "layout", "", "diff layout: unified or split")
-	fs.StringVar(&o.export, "export", "", "print saved notes: markdown")
+	fs.StringVar(&o.export, "export", "", "print saved drafts: markdown")
 	fs.BoolVar(&o.noColor, "no-color", false, "disable colour")
 	fs.BoolVar(&o.noUntracked, "no-untracked", false, "exclude untracked files")
 	fs.BoolVar(&o.showConfig, "config", false, "print the resolved configuration")
@@ -246,7 +247,7 @@ func run() error {
 	// macOS is ~/Library/Application Support. Move it once so saved notes
 	// survive the change of location.
 	if from, to, moved := config.Migrate(); moved {
-		fmt.Fprintf(os.Stderr, "crv: moved your notes and settings\n     from %s\n     to   %s\n", from, to)
+		fmt.Fprintf(os.Stderr, "crv: moved your drafts and settings\n     from %s\n     to   %s\n", from, to)
 	}
 
 	cwd, err := os.Getwd()
@@ -490,7 +491,7 @@ func printExport(format string, review *notes.Review) error {
 	}
 	md := review.Markdown()
 	if md == "" {
-		fmt.Fprintln(os.Stderr, "crv: no notes for this review")
+		fmt.Fprintln(os.Stderr, "crv: no drafts for this review")
 		return nil
 	}
 	_, err := os.Stdout.WriteString(md)
@@ -522,7 +523,7 @@ func printConfig(cfg config.Config, repoRoot string) error {
 		fmt.Printf("loaded     (none — all defaults; crv --help shows how to create one)\n")
 	}
 	dir, _ := notes.Dir()
-	fmt.Printf("notes      %s\n", dir)
+	fmt.Printf("drafts     %s\n", dir)
 	return nil
 }
 
