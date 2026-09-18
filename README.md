@@ -82,7 +82,7 @@ Reviewing:
 | `x` | mark this file reviewed |
 | `S` | submit the review to GitHub |
 | `y` | copy the selection, or the line, hunk or path under the cursor, as code |
-| `Y` | copy where it is instead, as `path:L12-L18` |
+| `Y` | copy a reference to it instead, as `path:L12-L18` |
 
 ### Mouse and clipboard
 

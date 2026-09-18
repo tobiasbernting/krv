@@ -107,9 +107,10 @@ func (m Model) listItemAt(y int) (int, bool) {
 		}
 		return idx, true
 	}
-	// Two header lines, then any warnings, then two lines per thread.
+	// Two header lines, then any warnings, then two lines per thread, then
+	// the status bar.
 	line := y - 2 + m.threadListTop() - m.threadListPrefix()
-	if y < 2 || line < 0 || line/2 >= len(m.follow.threads) {
+	if y < 2 || y >= 2+maxInt(1, m.height-3) || line < 0 || line/2 >= len(m.follow.threads) {
 		return 0, false
 	}
 	return line / 2, true
@@ -118,6 +119,12 @@ func (m Model) listItemAt(y int) (int, bool) {
 func keyRune(r rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 
 func (m Model) handleDiffMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	// SGR reporting names the button on release and X10 does not, so any
+	// release ends the drag.
+	if msg.Action == tea.MouseActionRelease {
+		m.drag.held = false
+		return m, nil
+	}
 	button := msg.Button
 	// Shift turns the vertical wheel sideways, for mice that have no
 	// horizontal wheel of their own.
@@ -144,10 +151,6 @@ func (m Model) handleDiffMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 			return m.clickDiff(msg.Y)
 		case tea.MouseActionMotion:
 			m.dragDiff(msg.Y)
-		}
-	case tea.MouseButtonNone:
-		if msg.Action == tea.MouseActionRelease {
-			m.drag.held = false
 		}
 	}
 	return m, nil

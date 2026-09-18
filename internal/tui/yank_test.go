@@ -170,3 +170,29 @@ func TestYankFailureIsReported(t *testing.T) {
 		t.Errorf("a failed copy was not reported:\n%s", m.statusBar())
 	}
 }
+
+const deletionDiff = `diff --git a/gone.go b/gone.go
+--- a/gone.go
++++ b/gone.go
+@@ -3,2 +2,0 @@
+-first
+-second
+`
+
+func TestYankOnADeletionOnlyHunkCopiesWhatWasRemoved(t *testing.T) {
+	clip := &fakeClipboard{}
+	m := New(Options{
+		Files: diffparse.Parse(deletionDiff), Theme: render.DefaultTheme(),
+		Config: config.Defaults(), Source: Source{Kind: SourceLocal, Title: "test"},
+		Review: newTestReview(t), Clipboard: clip,
+	})
+	m = m.cursorOnRow(t, render.RowHunk, 0)
+	m = yank(t, m, "y")
+	if got := clip.last(t); got != "first\nsecond" {
+		t.Errorf("copied %q from a hunk that only deletes, want the removed lines", got)
+	}
+	m = yank(t, m, "Y")
+	if len(clip.copied) != 1 || m.err == "" {
+		t.Errorf("Y on a deletion-only hunk copied %q; it has no new-side line to name", clip.copied)
+	}
+}

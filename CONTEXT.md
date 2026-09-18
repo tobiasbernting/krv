@@ -25,8 +25,9 @@ _Avoid_: Range, multi-line note, visual selection
 
 **Yank**:
 Copying diff content to the system clipboard as plain code, without gutter,
-line numbers or `+`/`-` markers.
-_Avoid_: Copy (ambiguous with the terminal's own selection)
+line numbers or `+`/`-` markers. The key is `y`; user-facing text says "copy",
+the plain word for it.
+_Avoid_: Clipboard (for the action), paste
 
 **Reference**:
 A location written as `path:L12-L18`, naming a line or Selection for pasting

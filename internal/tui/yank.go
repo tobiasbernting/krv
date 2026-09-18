@@ -32,7 +32,7 @@ func (m Model) yank(reference bool) (tea.Model, tea.Cmd) {
 	}
 	if reference {
 		if ref == "" {
-			m.err = "a deleted line has no line number to refer to"
+			m.err = "deleted lines have no line number to refer to"
 			return m, nil
 		}
 		text = ref
@@ -81,7 +81,16 @@ func (m Model) yankTarget() (text, ref string, lines int, err string) {
 		return path, path, 1, ""
 	case render.RowHunk:
 		h := file.Hunks()[row.HunkIdx]
-		end := h.NewStart + max(h.NewLines, 1) - 1
+		if h.NewLines == 0 {
+			// Nothing is left on the new side, so the removed lines are what
+			// there is to copy, and there is no line to name.
+			var code []string
+			for _, ln := range h.Lines {
+				code = append(code, ln.Text)
+			}
+			return strings.Join(code, "\n"), "", len(code), ""
+		}
+		end := h.NewStart + h.NewLines - 1
 		code := newSide(h.Lines, h.NewStart, end)
 		return strings.Join(code, "\n"), lineRef(path, h.NewStart, end), len(code), ""
 	case render.RowCode, render.RowPair:

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 )
 
@@ -129,12 +130,15 @@ func (m Model) helpLines() (lines []string, titleAt map[string]int) {
 		blocks[i] = m.helpBlock(s, keyWidth)
 	}
 	titleAt = map[string]int{}
-	if m.width < helpTwoColumns {
+	oneColumn := func() ([]string, map[string]int) {
 		for i, block := range blocks {
 			titleAt[sections[i].title] = len(lines)
 			lines = append(lines, block...)
 		}
 		return lines, titleAt
+	}
+	if m.width < helpTwoColumns {
+		return oneColumn()
 	}
 
 	// Fill the left column until it holds half the lines, the right with the
@@ -144,16 +148,28 @@ func (m Model) helpLines() (lines []string, titleAt map[string]int) {
 		total += len(block)
 	}
 	var left, right []string
+	leftAt, rightAt := map[string]int{}, map[string]int{}
 	for i, block := range blocks {
 		if len(left) < total/2 {
-			titleAt[sections[i].title] = len(left)
+			leftAt[sections[i].title] = len(left)
 			left = append(left, block...)
 		} else {
-			titleAt[sections[i].title] = len(right)
+			rightAt[sections[i].title] = len(right)
 			right = append(right, block...)
 		}
 	}
-	col := m.width / 2
+	// Side by side only when both columns fit whole: a line the terminal
+	// wraps would break the layout and the scrolling with it.
+	col := widest(left) + 2
+	if col+widest(right) > m.width {
+		return oneColumn()
+	}
+	for title, at := range leftAt {
+		titleAt[title] = at
+	}
+	for title, at := range rightAt {
+		titleAt[title] = at
+	}
 	surface := m.surface()
 	for i := 0; i < max(len(left), len(right)); i++ {
 		l, r := "", ""
@@ -166,6 +182,14 @@ func (m Model) helpLines() (lines []string, titleAt map[string]int) {
 		lines = append(lines, padStyled(surface, l, col)+r)
 	}
 	return lines, titleAt
+}
+
+func widest(lines []string) int {
+	w := 0
+	for _, line := range lines {
+		w = max(w, lipgloss.Width(line))
+	}
+	return w
 }
 
 // helpBlock is one section: its title, its entries, a blank line.
@@ -216,7 +240,8 @@ func (m Model) handleHelpKey(key string) Model {
 	case "g", "home":
 		m.helpTop = 0
 	case "G", "end":
-		m.helpTop = m.clampHelpTop(1 << 30)
+		lines, _ := m.helpLines()
+		m.helpTop = m.clampHelpTop(len(lines))
 	}
 	return m
 }
@@ -232,7 +257,7 @@ func (m Model) helpView() string {
 	for i := 0; i < height; i++ {
 		line := ""
 		if idx := top + i; idx < len(lines) {
-			line = lines[idx]
+			line = ansi.Truncate(lines[idx], m.width, "…")
 		}
 		b.WriteString(padStyled(surface, line, m.width) + "\n")
 	}

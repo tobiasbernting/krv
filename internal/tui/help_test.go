@@ -143,3 +143,15 @@ func TestEveryDiffKeyIsInHelp(t *testing.T) {
 		}
 	}
 }
+
+func TestTwoColumnHelpNeverOverflows(t *testing.T) {
+	for width := 110; width <= 170; width += 5 {
+		m := openHelp(t, followupModel(t), width, 60)
+		for i, line := range strings.Split(m.View(), "\n") {
+			if w := ansi.StringWidth(line); w > width {
+				t.Errorf("width %d: help line %d is %d columns and would wrap: %q", width, i, w, ansi.Strip(line))
+				break
+			}
+		}
+	}
+}

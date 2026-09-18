@@ -342,3 +342,25 @@ func TestQueueClickAndDoubleClick(t *testing.T) {
 		t.Errorf("double click did not open acme/y#4: %+v", q.Selected)
 	}
 }
+
+// SGR mouse reporting, which cell motion uses, names the button on release.
+func TestReleaseEndsTheDragWhateverButtonItNames(t *testing.T) {
+	m := newMouseModel(t)
+	sgrRelease := tea.MouseMsg{Y: 4, Action: tea.MouseActionRelease, Button: tea.MouseButtonLeft}
+	m = mouse(t, m, click(4), sgrRelease, drag(7))
+	if m.rangeAnchor != 0 {
+		t.Errorf("motion after the release still selected from L%d", m.rangeAnchor)
+	}
+}
+
+func TestClickBelowTheThreadListSelectsNothing(t *testing.T) {
+	m := followupModel(t)
+	second := m.follow.threads[0]
+	second.ID = "second"
+	m.follow.threads = append(m.follow.threads, second)
+	m.height = 5 // two list lines: just the first thread
+	m = mouse(t, m, click(m.height-1))
+	if m.follow.cursor != 0 {
+		t.Errorf("a click on the status bar selected thread %d, which is off screen", m.follow.cursor)
+	}
+}
