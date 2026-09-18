@@ -41,6 +41,7 @@ type Options struct {
 	Threads   []ghsrc.Thread
 	SyncedAt  time.Time
 	SyncError string
+	Clipboard Clipboard
 }
 
 type Model struct {
@@ -53,6 +54,7 @@ type Model struct {
 	cfg    config.Config
 	src    Source
 	review *notes.Review
+	clip   Clipboard
 
 	// blobs maps a path to the hash of its new-side content, so changed drafts
 	// can be detached for re-anchoring without re-reading the file.
@@ -122,6 +124,7 @@ func New(opts Options) Model {
 		newComments:     map[int64]bool{},
 		updatedComments: map[int64]bool{},
 		now:             time.Now,
+		clip:            opts.Clipboard,
 	}
 	m.sync.syncedAt = opts.SyncedAt
 	m.sync.err = opts.SyncError
@@ -268,6 +271,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.applySyncResult(msg)
 	case syncTickMsg:
 		return m, tickSyncAge()
+	case yankedMsg:
+		return m.applyYanked(msg)
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 	case tea.MouseMsg:
@@ -386,6 +391,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.startComment()
 	case "v":
 		return m.toggleRangeAnchor()
+	case "y":
+		return m.yank(false)
+	case "Y":
+		return m.yank(true)
 	case "e":
 		return m.editNoteUnderCursor()
 	case "d":

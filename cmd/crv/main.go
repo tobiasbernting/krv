@@ -15,6 +15,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
+	"github.com/tobiasbernting/code-review-cli/internal/clipboard"
 	"github.com/tobiasbernting/code-review-cli/internal/config"
 	"github.com/tobiasbernting/code-review-cli/internal/diffparse"
 	"github.com/tobiasbernting/code-review-cli/internal/followup"
@@ -346,6 +347,7 @@ func start(repo *gitsrc.Repo, cfg config.Config, src tui.Source, files []*diffpa
 		Source:  src,
 		Review:  review,
 		Threads: threads, SyncedAt: syncedAt, SyncError: syncError,
+		Clipboard: clipboard.New(),
 	}), screenOptions(cfg)...).Run()
 	return err
 }
