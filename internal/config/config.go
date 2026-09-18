@@ -55,6 +55,10 @@ type Config struct {
 	// Color enables syntax highlighting and diff colours.
 	Color bool `toml:"color"`
 
+	// Mouse lets crv take clicks, drags and the wheel. The terminal's own
+	// text selection then needs a modifier held (Shift, or Option in iTerm2).
+	Mouse bool `toml:"mouse"`
+
 	// sources records where the settings came from, for `crv --config`.
 	sources []string
 }
@@ -67,6 +71,7 @@ func Defaults() Config {
 		Untracked: true,
 		Width:     120,
 		Color:     true,
+		Mouse:     true,
 	}
 }
 
@@ -146,6 +151,8 @@ func mergeFile(cfg *Config, path string) error {
 			cfg.Width = file.Width
 		case "color":
 			cfg.Color = file.Color
+		case "mouse":
+			cfg.Mouse = file.Mouse
 		default:
 			return fmt.Errorf("%s: unknown setting %q", path, key.String())
 		}
@@ -201,6 +208,13 @@ func mergeEnv(cfg *Config) error {
 			return fmt.Errorf("CRV_COLOR: %w", err)
 		}
 		cfg.Color = b
+	}
+	if v, ok := os.LookupEnv("CRV_MOUSE"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("CRV_MOUSE: %w", err)
+		}
+		cfg.Mouse = b
 	}
 	return nil
 }

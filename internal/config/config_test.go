@@ -188,3 +188,33 @@ func TestEditorPrecedence(t *testing.T) {
 		t.Errorf("fallback = %q, want vi", got)
 	}
 }
+
+func TestMouseIsOnByDefaultAndCanBeTurnedOff(t *testing.T) {
+	useConfigDir(t)
+	cfg, err := Load(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Mouse {
+		t.Error("mouse is off by default, want on")
+	}
+
+	repo := t.TempDir()
+	write(t, repo, RepoFile, "mouse = false\n")
+	cfg, err = Load(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Mouse {
+		t.Error("mouse = false in the file left it on")
+	}
+
+	t.Setenv("CRV_MOUSE", "true")
+	cfg, err = Load(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Mouse {
+		t.Error("CRV_MOUSE=true should win over the file's false")
+	}
+}

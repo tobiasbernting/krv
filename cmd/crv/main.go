@@ -346,8 +346,17 @@ func start(repo *gitsrc.Repo, cfg config.Config, src tui.Source, files []*diffpa
 		Source:  src,
 		Review:  review,
 		Threads: threads, SyncedAt: syncedAt, SyncError: syncError,
-	}), tea.WithAltScreen()).Run()
+	}), screenOptions(cfg)...).Run()
 	return err
+}
+
+// screenOptions are the full-screen program settings every crv screen shares.
+func screenOptions(cfg config.Config) []tea.ProgramOption {
+	opts := []tea.ProgramOption{tea.WithAltScreen()}
+	if cfg.Mouse {
+		opts = append(opts, tea.WithMouseCellMotion())
+	}
+	return opts
 }
 
 // runQueue shows the review queue and returns what was chosen.
@@ -368,7 +377,7 @@ func runQueue(repo *gitsrc.Repo, cfg config.Config, limit int) (tui.Selection, e
 		return tui.Selection{}, err
 	}
 
-	model, err := tea.NewProgram(tui.NewQueue(client, th, limit), tea.WithAltScreen()).Run()
+	model, err := tea.NewProgram(tui.NewQueue(client, th, limit), screenOptions(cfg)...).Run()
 	if err != nil {
 		return tui.Selection{}, err
 	}
@@ -500,6 +509,7 @@ func printConfig(cfg config.Config, repoRoot string) error {
 	fmt.Printf("editor     %s\n", cfg.EditorCommand())
 	fmt.Printf("untracked  %t\n", cfg.Untracked)
 	fmt.Printf("color      %t\n", cfg.Color)
+	fmt.Printf("mouse      %t\n", cfg.Mouse)
 	fmt.Printf("width      %d\n", cfg.Width)
 	fmt.Printf("\nuser file  %s%s\n", userPath, exists(userPath))
 	repoFile := filepath.Join(repoRoot, config.RepoFile)

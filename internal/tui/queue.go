@@ -37,8 +37,10 @@ type QueueModel struct {
 	Selected Selection
 
 	cursor        int
-	top           int
 	width, height int
+
+	lastPress lastPress
+	now       func() time.Time
 }
 
 func NewQueue(client ghsrc.Client, theme render.Theme, limit int) QueueModel {
@@ -48,6 +50,7 @@ func NewQueue(client ghsrc.Client, theme render.Theme, limit int) QueueModel {
 		drafts: map[string]int{},
 		width:  80, height: 24,
 		loading: true,
+		now:     time.Now,
 	}
 }
 
@@ -97,6 +100,33 @@ func (m QueueModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
+	}
+	return m, nil
+}
+
+// listTop is the first pull request shown: the list scrolls only as far as
+// keeps the selection on screen, below the one-line header.
+func (m QueueModel) listTop() int {
+	return maxInt(0, m.cursor-(m.height-2)+1)
+}
+
+func (m QueueModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	switch msg.Button {
+	case tea.MouseButtonWheelDown:
+		return m.handleKey(keyRune('j'))
+	case tea.MouseButtonWheelUp:
+		return m.handleKey(keyRune('k'))
+	case tea.MouseButtonLeft:
+		idx := m.listTop() + msg.Y - 1
+		if msg.Action != tea.MouseActionPress || msg.Y < 1 || msg.Y > m.height-2 || idx >= len(m.items) {
+			return m, nil
+		}
+		m.cursor = idx
+		if m.lastPress.double(0, idx, m.now()) {
+			return m.handleKey(tea.KeyMsg{Type: tea.KeyEnter})
+		}
 	}
 	return m, nil
 }
@@ -182,14 +212,9 @@ func (m QueueModel) View() string {
 		b.WriteString(surface.Render(pad("", m.width)) + "\n")
 		b.WriteString(m.message(t.Dim, "nothing waiting on you — press t for your own pull requests") + "\n")
 	default:
-		if m.cursor >= m.top+body {
-			m.top = m.cursor - body + 1
-		}
-		if m.cursor < m.top {
-			m.top = m.cursor
-		}
+		top := m.listTop()
 		for i := 0; i < body; i++ {
-			idx := m.top + i
+			idx := top + i
 			if idx >= len(m.items) {
 				b.WriteString(surface.Render(pad("", m.width)) + "\n")
 				continue

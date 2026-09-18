@@ -27,7 +27,7 @@ func Template() string {
 #   1. command-line flags
 #   2. environment: CRV_HOST, CRV_THEME, CRV_SYNTAX, CRV_DENSITY,
 #      CRV_LAYOUT, CRV_EDITOR, CRV_WIDTH, CRV_UNTRACKED, CRV_COLOR,
-#      NO_COLOR
+#      CRV_MOUSE, NO_COLOR
 #   3. %s in the repository being reviewed
 #   4. this file
 #
@@ -68,9 +68,14 @@ func Template() string {
 # says.
 # color = %t
 
+# Clicks, drags and the wheel. Click moves the cursor, a double click opens,
+# a drag selects lines. While crv has the mouse, the terminal's own text
+# selection needs a modifier: hold Shift (Option in iTerm2, fn in Terminal.app).
+# mouse = %t
+
 # Output width used when stdout is not a terminal.
 # width = %d
-`, RepoFile, RepoFile, d.Theme, d.Density, d.Layout, d.Untracked, d.Color, d.Width)
+`, RepoFile, RepoFile, d.Theme, d.Density, d.Layout, d.Untracked, d.Color, d.Mouse, d.Width)
 }
 
 // ErrConfigExists is returned rather than overwriting someone's settings.

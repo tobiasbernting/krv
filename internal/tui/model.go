@@ -92,6 +92,11 @@ type Model struct {
 	sync        syncState
 	detail      commentDetail
 	reanchor    reanchorState
+	lastPress   lastPress
+	drag        dragState
+
+	// now is the clock double clicks are timed against.
+	now func() time.Time
 }
 
 type pendingNote struct {
@@ -116,6 +121,7 @@ func New(opts Options) Model {
 		expandedThreads: map[string]bool{},
 		newComments:     map[int64]bool{},
 		updatedComments: map[int64]bool{},
+		now:             time.Now,
 	}
 	m.sync.syncedAt = opts.SyncedAt
 	m.sync.err = opts.SyncError
@@ -264,6 +270,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tickSyncAge()
 	case tea.KeyMsg:
 		return m.handleKey(msg)
+	case tea.MouseMsg:
+		return m.handleMouse(msg)
 	}
 	return m, nil
 }
@@ -351,12 +359,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "shift+tab", "K", "[":
 		m.jump(m.doc.FileRows, -1, "file")
 	case "l", "right":
-		m.hoffset += 8
+		m.hoffset += hStep
 	case "h", "left":
-		m.hoffset -= 8
-		if m.hoffset < 0 {
-			m.hoffset = 0
-		}
+		m.hoffset = max(0, m.hoffset-hStep)
 	case "0":
 		m.hoffset = 0
 	case "s":
@@ -523,7 +528,7 @@ func (m *Model) clampScroll() {
 	vh := m.viewportHeight()
 	rowHeight := 1
 	if m.cursor >= 0 && m.cursor < len(m.doc.Rows) && m.doc.Rows[m.cursor].Kind == render.RowNote {
-		rowHeight = len(m.rend.RenderLines(m.doc.Rows[m.cursor], m.width, m.hoffset, true, 8))
+		rowHeight = len(m.rend.RenderLines(m.doc.Rows[m.cursor], m.width, m.hoffset, true, focusLines))
 	}
 	if m.cursor < m.top {
 		m.top = m.cursor
@@ -555,6 +560,10 @@ func (m Model) View() string {
 	return m.diffView()
 }
 
+// focusLines is how far the row under the cursor may expand: a comment shows
+// its line breaks there, up to this many lines.
+const focusLines = 8
+
 func (m Model) diffView() string {
 	vh := m.viewportHeight()
 	var b strings.Builder
@@ -562,7 +571,7 @@ func (m Model) diffView() string {
 	for idx := m.top; idx < len(m.doc.Rows) && written < vh; idx++ {
 		maxLines := 1
 		if idx == m.cursor {
-			maxLines = 8
+			maxLines = focusLines
 		}
 		lines := m.rend.RenderLines(m.doc.Rows[idx], m.width, m.hoffset, idx == m.cursor, maxLines)
 		for _, line := range lines {
@@ -716,10 +725,7 @@ func (m Model) filesView() string {
 	var b strings.Builder
 	surface := m.surface()
 	vh := m.viewportHeight()
-	top := 0
-	if m.fileCursor >= vh {
-		top = m.fileCursor - vh + 1
-	}
+	top := m.filesTop()
 	for i := 0; i < vh; i++ {
 		idx := top + i
 		if idx >= len(m.doc.Files) {
@@ -752,6 +758,12 @@ func (m Model) filesView() string {
 	left := fmt.Sprintf(" %d files", len(m.doc.Files))
 	b.WriteString(bar(m.theme, m.width, left, fitHint(m.width, left, m.hintKeys())))
 	return b.String()
+}
+
+// filesTop is the first file the file list shows: the list scrolls only as
+// far as it takes to keep the selection on screen.
+func (m Model) filesTop() int {
+	return max(0, m.fileCursor-m.viewportHeight()+1)
 }
 
 func (m Model) notesFor(path string) int {

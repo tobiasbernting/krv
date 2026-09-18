@@ -8,7 +8,7 @@
 #   1. command-line flags
 #   2. environment: CRV_HOST, CRV_THEME, CRV_SYNTAX, CRV_DENSITY,
 #      CRV_LAYOUT, CRV_EDITOR, CRV_WIDTH, CRV_UNTRACKED, CRV_COLOR,
-#      NO_COLOR
+#      CRV_MOUSE, NO_COLOR
 #   3. .crv.toml in the repository being reviewed
 #   4. this file
 #
@@ -48,6 +48,11 @@
 # Syntax highlighting and diff colours. NO_COLOR disables them whatever this
 # says.
 # color = true
+
+# Clicks, drags and the wheel. Click moves the cursor, a double click opens,
+# a drag selects lines. While crv has the mouse, the terminal's own text
+# selection needs a modifier: hold Shift (Option in iTerm2, fn in Terminal.app).
+# mouse = true
 
 # Output width used when stdout is not a terminal.
 # width = 120

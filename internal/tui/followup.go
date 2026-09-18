@@ -387,13 +387,7 @@ func (m Model) followupView() string {
 	}
 	top := m.follow.top
 	if m.mode == modeThreads {
-		// Each thread is two rows. Warnings precede the list.
-		prefix := len(m.follow.session.Warnings)
-		if m.follow.session.ComparisonError != "" {
-			prefix++
-		}
-		target := prefix + 2*m.follow.cursor
-		top = maxInt(0, target-height+2)
+		top = m.threadListTop()
 	} else {
 		top = maxInt(0, min(top, len(lines)-height))
 	}
@@ -437,6 +431,22 @@ func (m Model) followupView() string {
 	}
 	b.WriteString(bar(m.theme, m.width, left, right))
 	return b.String()
+}
+
+// threadListPrefix is how many warning lines precede the threads.
+func (m Model) threadListPrefix() int {
+	prefix := len(m.follow.session.Warnings)
+	if m.follow.session.ComparisonError != "" {
+		prefix++
+	}
+	return prefix
+}
+
+// threadListTop is the first line the thread list shows. Each thread is two
+// lines, and the list scrolls only as far as keeps the selection on screen.
+func (m Model) threadListTop() int {
+	target := m.threadListPrefix() + 2*m.follow.cursor
+	return maxInt(0, target-maxInt(1, m.height-3)+2)
 }
 
 func (m Model) threadListLines() []string {

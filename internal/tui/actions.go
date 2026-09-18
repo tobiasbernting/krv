@@ -78,13 +78,17 @@ func (m Model) startComment() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m *Model) clearSelection() {
+	m.rangeAnchor, m.rangeAnchorPath, m.rangeAnchorHunk = 0, "", -1
+}
+
 func (m Model) toggleRangeAnchor() (tea.Model, tea.Cmd) {
 	if m.changesView {
 		m.err = "press D for the current PR diff before editing draft anchors"
 		return m, nil
 	}
 	if m.rangeAnchor > 0 {
-		m.rangeAnchor, m.rangeAnchorPath, m.rangeAnchorHunk = 0, "", -1
+		m.clearSelection()
 		m.status = "selection cleared"
 		return m, nil
 	}
@@ -217,7 +221,7 @@ func (m *Model) commit(body string) {
 		m.status = "note added"
 	}
 
-	m.rangeAnchor, m.rangeAnchorPath, m.rangeAnchorHunk = 0, "", -1
+	m.clearSelection()
 	m.pending = pendingNote{}
 	m.save()
 	m.rebuild()
