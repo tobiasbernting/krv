@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/tobiasbernting/krv/compare/v1.6.0...v2.0.0) (2026-09-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* rename crv to krv ([#29](https://github.com/tobiasbernting/krv/issues/29))
+
+### Features
+
+* rename crv to krv ([#29](https://github.com/tobiasbernting/krv/issues/29)) ([ab51153](https://github.com/tobiasbernting/krv/commit/ab51153951a1a281169a30b101b51ce628b97331))
+
 ## [1.6.0](https://github.com/tobiasbernting/krv/compare/v1.5.0...v1.6.0) (2026-09-18)
 
 
