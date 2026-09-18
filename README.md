@@ -67,20 +67,40 @@ hides them.
 | `r` | sync the current pull request |
 | `N` / `P` | next / previous thread with new activity |
 | `enter` | expand a thread or open a comment |
-| `?` | help |
+| `?` | every key, grouped, with a few recipes |
 | `q` | quit |
 
 Reviewing:
 
 | key | action |
 | --- | --- |
-| `c` | comment on this line |
-| `v` | start a multi-line selection, then move and press `c` |
-| `e` / `d` | edit / delete the note under the cursor |
+| `c` | draft a comment on this line or the selection |
+| `v` | start or clear a selection, then move and press `c` or `y` |
+| `e` / `d` | edit / delete the draft under the cursor |
 | `m` | move a detached draft to a new line or range |
-| `ctrl+e` | finish a note in `$EDITOR` instead |
+| `ctrl+e` | finish a draft in `$EDITOR` instead |
 | `x` | mark this file reviewed |
 | `S` | submit the review to GitHub |
+| `y` | copy the selection, or the line, hunk or path under the cursor, as code |
+| `Y` | copy where it is instead, as `path:L12-L18` |
+
+### Mouse and clipboard
+
+The wheel scrolls; the cursor stays put unless it would leave the screen.
+`shift`+wheel scrolls sideways. A click moves the cursor, a double click does
+what `enter` does, and a drag selects lines for a comment or a copy — within
+one hunk, scrolling when it reaches the edge. The file list, the thread list
+and the queue select on click and open on double click.
+
+While crv has the mouse, the terminal's own text selection needs a modifier:
+hold `shift` in most terminals, `option` in iTerm2, `fn` in Terminal.app. That
+selection copies the gutter and, in split layout, both sides; `y` copies just
+the code. Set `mouse = false` to give the mouse back to the terminal.
+
+`y` and `Y` write to the clipboard through the terminal (OSC 52), which works
+over SSH and inside tmux (with `set -g allow-passthrough on`), and, when
+running locally, through `pbcopy`, `wl-copy`, `xclip`, `xsel` or `clip.exe` as
+well, for terminals that ignore OSC 52.
 
 ### Flags
 
@@ -246,6 +266,7 @@ layout = "unified"            # unified or split; split needs 140 columns
 editor = "hx"
 untracked = true
 color = true
+mouse = true                  # false leaves clicks and drags to the terminal
 width = 120
 ```
 
@@ -266,6 +287,7 @@ the code being reviewed.
 | `internal/render` | diffs → styled rows; syntax and word-level highlighting |
 | `internal/tui` | bubbletea viewport over those rows |
 | `internal/notes` | review notes and per-file marks on disk |
+| `internal/clipboard` | OSC 52 and the platform copy command |
 | `internal/ghsrc` | pull requests, comments and review submission, via `gh` |
 | `internal/config` | settings resolution |
 
@@ -321,7 +343,6 @@ goreleaser build --snapshot --clean
 
 ## Planned
 
-- Mouse support and OSC 52 yank
 - Replying to a teammate's comment thread
 - `LEFT`-side comments on deleted lines
 

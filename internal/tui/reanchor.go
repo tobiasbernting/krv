@@ -109,7 +109,7 @@ func (m Model) finishReanchor() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.rangeAnchorHunk != hunk {
-			m.err = "a multi-line note cannot span two hunks"
+			m.err = "a selection cannot span two hunks"
 			return m, nil
 		}
 		start = m.rangeAnchor

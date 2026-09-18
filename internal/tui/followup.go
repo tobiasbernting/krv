@@ -80,8 +80,7 @@ func (m Model) handleThreadKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "?":
-		m.helpReturn = m.mode
-		m.mode = modeHelp
+		m.openHelp()
 	case "esc", "t":
 		if m.mode == modeThreads {
 			m.mode = modeDiff

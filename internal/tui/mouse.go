@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -201,6 +202,7 @@ func (m *Model) dragDiff(y int) {
 		at.cursor = origin
 		if path, line, hunk, ok := at.cursorLine(); ok {
 			m.rangeAnchor, m.rangeAnchorPath, m.rangeAnchorHunk = line, path, hunk
+			m.status = fmt.Sprintf("selecting from L%d — c to comment or y to copy", line)
 		}
 	}
 	if m.rangeAnchor > 0 {

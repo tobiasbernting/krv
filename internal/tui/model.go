@@ -90,6 +90,7 @@ type Model struct {
 	follow      followupState
 	changesView bool
 	helpReturn  mode
+	helpTop     int
 	submit      submitState
 	sync        syncState
 	detail      commentDetail
@@ -305,10 +306,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case modeComment:
 		return m.handleCommentKey(msg)
 	case modeHelp:
-		if key == "q" || key == "esc" || key == "?" {
-			m.mode = m.helpReturn
-		}
-		return m, nil
+		return m.handleHelpKey(key), nil
 	case modeFiles:
 		return m.handleFilesKey(key)
 	}
@@ -328,8 +326,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "D":
 		m.showCurrentDiff("")
 	case "?":
-		m.helpReturn = m.mode
-		m.mode = modeHelp
+		m.openHelp()
 	case "f":
 		if len(m.doc.Rows) == 0 || len(m.doc.Files) == 0 {
 			m.err = "no files"
@@ -630,10 +627,10 @@ func (m Model) statusBar() string {
 		left = " since review " + shortSHA(m.src.HeadSHA) + " ·" + left
 	}
 	if n := len(m.review.Notes); n > 0 {
-		left += fmt.Sprintf("  ·  %d note%s", n, plural(n))
+		left += fmt.Sprintf("  ·  %d draft%s", n, plural(n))
 	}
 	if m.rangeAnchor > 0 {
-		left += fmt.Sprintf("  ·  range from L%d", m.rangeAnchor)
+		left += fmt.Sprintf("  ·  selection from L%d", m.rangeAnchor)
 	}
 	if m.layout.Mode != m.doc.Layout.Mode {
 		left += "  ·  split → unified (narrow)"
@@ -684,17 +681,17 @@ func (m Model) hintKeys() []string {
 	}
 	if m.src.CanSubmit() {
 		return []string{
-			"c note  x reviewed  t threads  a changes  D PR diff  r sync  S submit  ? help  q quit",
-			"c note  x reviewed  t threads  r sync  S submit  ? help  q quit",
-			"c note  x reviewed  S submit  ? help",
-			"c note  S submit  ? help",
+			"c comment  x reviewed  t threads  a changes  D PR diff  r sync  S submit  ? help  q quit",
+			"c comment  x reviewed  t threads  r sync  S submit  ? help  q quit",
+			"c comment  x reviewed  S submit  ? help",
+			"c comment  S submit  ? help",
 			"? help",
 		}
 	}
 	return []string{
-		"c note  x reviewed  ? help  q quit",
-		"c note  x reviewed  ? help",
-		"c note  ? help",
+		"c comment  x reviewed  ? help  q quit",
+		"c comment  x reviewed  ? help",
+		"c comment  ? help",
 		"? help",
 	}
 }
@@ -759,7 +756,7 @@ func (m Model) filesView() string {
 		}
 		line := fmt.Sprintf("%s%s %-8s %s  +%d −%d", edge, mark, statusLabel(f), f.Path(), f.Additions, f.Deletions)
 		if n := m.notesFor(f.Path()); n > 0 {
-			line += fmt.Sprintf("  %d note%s", n, plural(n))
+			line += fmt.Sprintf("  %d draft%s", n, plural(n))
 		}
 		b.WriteString(st.Render(pad(line, m.width)))
 		b.WriteString("\n")
@@ -790,58 +787,6 @@ func statusLabel(f *diffparse.FileDiff) string {
 		return "binary"
 	}
 	return f.Status.String()
-}
-
-func (m Model) helpView() string {
-	rows := [][2]string{
-		{"t / a / D", "your threads / changes since review / current PR diff"},
-		{"threads: x / c / R", "verify locally / reply / resolve or reopen on GitHub"},
-		{"j / k, ↓ / ↑", "move down / up"},
-		{"ctrl+d / ctrl+u", "half page down / up"},
-		{"n / p", "next / previous hunk"},
-		{"tab / shift+tab", "next / previous file"},
-		{"J / K, ] / [", "next / previous file (aliases)"},
-		{"g / G", "top / bottom"},
-		{"h / l, ← / →", "scroll horizontally, 0 resets"},
-		{"s", "toggle split / unified layout for this session"},
-		{"f", "file list"},
-		{"r", "sync the pull request diff and threads"},
-		{"N / P", "next / previous thread with new activity"},
-		{"", ""},
-		{"c", "comment on this line"},
-		{"v", "start / clear a multi-line selection"},
-		{"e", "edit the note under the cursor"},
-		{"d", "delete the note under the cursor"},
-		{"m", "re-anchor a detached local draft"},
-		{"enter", "expand a thread or open a comment"},
-		{"x", "mark this file reviewed"},
-		{"ctrl+e", "compose in $EDITOR while writing a note"},
-		{"S", "submit the review to GitHub"},
-		{"", ""},
-		{"esc", "back to the diff from threads, files or a comment"},
-		{"?", "this help"},
-		{"q", "quit"},
-	}
-	bg := lipgloss.Color(m.theme.Bg)
-	keyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Accent)).Background(bg).Bold(true)
-	descStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Fg)).Background(bg)
-	surface := m.surface()
-	blank := surface.Render(pad("", m.width))
-
-	var b strings.Builder
-	b.WriteString(blank + "\n")
-	b.WriteString(surface.Bold(true).Render(pad("  crv — keys", m.width)) + "\n" + blank + "\n")
-	for _, r := range rows {
-		if r[0] == "" {
-			b.WriteString(blank + "\n")
-			continue
-		}
-		line := surface.Render("  ") + keyStyle.Render(fmt.Sprintf("%-16s", r[0])) + descStyle.Render(r[1])
-		b.WriteString(padStyled(surface, line, m.width) + "\n")
-	}
-	b.WriteString(blank + "\n")
-	b.WriteString(surface.Render(pad("  press any of q / esc / ? to return", m.width)) + "\n")
-	return b.String()
 }
 
 func bar(t render.Theme, width int, left, right string) string {

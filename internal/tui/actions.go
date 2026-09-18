@@ -59,7 +59,7 @@ func (m Model) startComment() (tea.Model, tea.Cmd) {
 		// same diff hunk, and rejects the whole review with a bare 422 when
 		// they do not.
 		if m.rangeAnchorHunk != hunk {
-			m.err = "a multi-line note cannot span two hunks — press v to clear the selection"
+			m.err = "a selection cannot span two hunks — press v to clear it"
 			return m, nil
 		}
 		start = m.rangeAnchor
@@ -69,9 +69,9 @@ func (m Model) startComment() (tea.Model, tea.Cmd) {
 	}
 
 	m.pending = pendingNote{path: path, startLine: start, line: line}
-	prompt := fmt.Sprintf("note L%d", line)
+	prompt := fmt.Sprintf("draft L%d", line)
 	if start != line {
-		prompt = fmt.Sprintf("note L%d-%d", start, line)
+		prompt = fmt.Sprintf("draft L%d-%d", start, line)
 	}
 	m.in.start(prompt+" ›", "")
 	m.mode = modeInput
@@ -98,7 +98,7 @@ func (m Model) toggleRangeAnchor() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.rangeAnchor, m.rangeAnchorPath, m.rangeAnchorHunk = line, path, hunk
-	m.status = fmt.Sprintf("selecting from L%d — move, then press c", line)
+	m.status = fmt.Sprintf("selecting from L%d — move, then c to comment or y to copy", line)
 	return m, nil
 }
 
@@ -123,7 +123,7 @@ func (m Model) noteUnderCursor() (notes.Note, bool) {
 func (m Model) editNoteUnderCursor() (tea.Model, tea.Cmd) {
 	n, ok := m.noteUnderCursor()
 	if !ok {
-		m.err = "put the cursor on one of your notes to edit it"
+		m.err = "put the cursor on one of your drafts to edit it"
 		return m, nil
 	}
 	m.pending = pendingNote{path: n.Path, startLine: n.StartLine, line: n.Line, editingID: n.ID}
@@ -135,13 +135,13 @@ func (m Model) editNoteUnderCursor() (tea.Model, tea.Cmd) {
 func (m Model) deleteNoteUnderCursor() (tea.Model, tea.Cmd) {
 	n, ok := m.noteUnderCursor()
 	if !ok {
-		m.err = "put the cursor on one of your notes to delete it"
+		m.err = "put the cursor on one of your drafts to delete it"
 		return m, nil
 	}
 	m.review.Delete(n.ID)
 	m.save()
 	m.rebuild()
-	m.status = "note deleted"
+	m.status = "draft deleted"
 	return m, nil
 }
 
@@ -209,16 +209,16 @@ func (m *Model) commit(body string) {
 	if body == "" {
 		if m.pending.editingID != "" {
 			m.review.Delete(m.pending.editingID)
-			m.status = "note deleted"
+			m.status = "draft deleted"
 		} else {
-			m.status = "empty note discarded"
+			m.status = "empty draft discarded"
 		}
 	} else if m.pending.editingID != "" {
 		m.review.Update(m.pending.editingID, body)
-		m.status = "note updated"
+		m.status = "draft updated"
 	} else {
 		m.review.Add(m.pending.path, m.pending.startLine, m.pending.line, m.blobs[m.pending.path], body)
-		m.status = "note added"
+		m.status = "draft added"
 	}
 
 	m.clearSelection()
@@ -229,7 +229,7 @@ func (m *Model) commit(body string) {
 
 func (m *Model) save() {
 	if err := m.review.Save(); err != nil {
-		m.err = "could not save notes: " + err.Error()
+		m.err = "could not save drafts: " + err.Error()
 	}
 }
 
@@ -253,13 +253,13 @@ func (m Model) openEditor(body string) tea.Cmd {
 		b.WriteString("\n")
 	}
 	b.WriteString("\n")
-	fmt.Fprintf(&b, "# Note on %s", m.pending.path)
+	fmt.Fprintf(&b, "# Draft on %s", m.pending.path)
 	if m.pending.startLine > 0 && m.pending.startLine != m.pending.line {
 		fmt.Fprintf(&b, " lines %d-%d", m.pending.startLine, m.pending.line)
 	} else {
 		fmt.Fprintf(&b, " line %d", m.pending.line)
 	}
-	b.WriteString("\n# Lines starting with # are ignored. An empty note is discarded.\n")
+	b.WriteString("\n# Lines starting with # are ignored. An empty draft is discarded.\n")
 	if _, err := file.WriteString(b.String()); err != nil {
 		file.Close()
 		return func() tea.Msg { return editorFinishedMsg{err: err} }

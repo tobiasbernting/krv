@@ -27,7 +27,7 @@ func (m Model) openSubmit() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if !m.src.CanSubmit() {
-		m.err = "not reviewing a pull request — notes stay local"
+		m.err = "not reviewing a pull request — drafts stay local"
 		return m, nil
 	}
 	if m.needsReanchor() > 0 {

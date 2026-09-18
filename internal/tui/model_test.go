@@ -161,8 +161,8 @@ func TestStatusBarKeepsCoreHints(t *testing.T) {
 	for _, width := range []int{200, 120, 100, 80, 60, 40} {
 		m.width = width
 		bar := m.statusBar()
-		if width >= 80 && !strings.Contains(bar, "c note") {
-			t.Errorf("width %d: status bar lost the note hint: %q", width, bar)
+		if width >= 80 && !strings.Contains(bar, "c comment") {
+			t.Errorf("width %d: status bar lost the comment hint: %q", width, bar)
 		}
 		if !strings.Contains(bar, "? help") {
 			t.Errorf("width %d: status bar lost the help hint: %q", width, bar)
