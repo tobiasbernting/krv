@@ -174,16 +174,16 @@ func TestReviewSnapshotUsesBrowserBaselineAndRetriesWholeLoad(t *testing.T) {
 	for _, unavailable := range []bool{false, true} {
 		t.Run(fmt.Sprint(unavailable), func(t *testing.T) {
 			prCalls, histories := 0, 0
-			client := Client{runOverride: func(_ []byte, args ...string) (string, error) {
+			client := Client{runOverride: func(stdin []byte, args ...string) (string, error) {
 				command := strings.Join(args, " ")
 				switch {
-				case strings.HasPrefix(command, "pr view"):
+				case isPRQuery(stdin):
 					prCalls++
 					sha := head
 					if prCalls > 1 {
 						sha = moved
 					}
-					return fmt.Sprintf(`{"number":1,"headRefOid":%q}`, sha), nil
+					return prResponse(sha), nil
 				case strings.HasPrefix(command, "pr diff"):
 					return "", nil
 				case strings.Contains(command, "/comments"):
@@ -229,12 +229,12 @@ func TestPinnedSubmissionRejectsMovedHeadAndGitHubFailure(t *testing.T) {
 	for _, moved := range []bool{false, true} {
 		posted := false
 		client := Client{runOverride: func(input []byte, args ...string) (string, error) {
-			if args[0] == "pr" {
+			if isPRQuery(input) {
 				head := "reviewed"
 				if moved {
 					head = "new"
 				}
-				return fmt.Sprintf(`{"headRefOid":%q}`, head), nil
+				return prResponse(head), nil
 			}
 			posted = true
 			var request reviewRequest

@@ -77,6 +77,9 @@ read.
 
 A sync fetches the latest diff and all visible review threads. It verifies that
 the pull request head did not move during the fetch and retries once if it did.
+The same GraphQL request that reads the head also reads its Checks, so they
+are part of the snapshot; a host without `isRequired` leaves required status
+unknown.
 The new diff and threads replace the current snapshot together. If any required
 fetch fails, neither is applied, so old line coordinates are never combined
 with a new diff.
