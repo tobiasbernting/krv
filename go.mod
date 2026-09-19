@@ -12,6 +12,7 @@ require (
 	github.com/mattn/go-isatty v0.0.24
 	github.com/mattn/go-runewidth v0.0.29
 	github.com/muesli/termenv v0.16.0
+	github.com/yuin/goldmark v1.8.6
 )
 
 require (
