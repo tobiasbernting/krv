@@ -7,11 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tobiasbernting/krv/v2/internal/browser"
 	"github.com/tobiasbernting/krv/v2/internal/config"
 	"github.com/tobiasbernting/krv/v2/internal/diffparse"
 	"github.com/tobiasbernting/krv/v2/internal/gitsrc"
@@ -48,10 +48,12 @@ type headFileMsg struct {
 	err  error
 }
 
-// launchedMsg reports an editor or browser krv started, by name.
+// launchedMsg reports an editor or browser krv started, by name, or that a
+// link was copied instead of opened.
 type launchedMsg struct {
-	name string
-	err  error
+	name   string
+	copied bool
+	err    error
 }
 
 // startProcess starts a program krv does not wait for. Tests replace it.
@@ -127,6 +129,8 @@ func (m Model) applyLaunched(msg launchedMsg) (tea.Model, tea.Cmd) {
 	case msg.err != nil:
 		m.status = ""
 		m.err = "could not open: " + msg.err.Error()
+	case msg.copied:
+		m.status = "copied link"
 	case msg.name != "":
 		m.status = "opened in " + msg.name
 	}
@@ -146,18 +150,18 @@ func (m Model) openPullRequest() (tea.Model, tea.Cmd) {
 	return m, browse(filesURL(m.src.URL, path, line))
 }
 
-// browse opens url in the system's browser.
+// browse opens url in the system's browser, or copies it (see package
+// browser).
 func browse(url string) tea.Cmd {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
+	o := browser.New()
+	o.Start = func(name string, args ...string) error { return startProcess(exec.Command(name, args...)) }
+	return func() tea.Msg {
+		copied, err := o.Open(url)
+		if copied {
+			return launchedMsg{copied: true}
+		}
+		return launchedMsg{name: "browser", err: err}
 	}
-	return func() tea.Msg { return launchedMsg{name: "browser", err: startProcess(cmd)} }
 }
 
 // openTarget is the file and head-side line o and O open: the cursor's line,

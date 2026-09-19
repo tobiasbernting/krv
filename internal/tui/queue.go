@@ -115,6 +115,8 @@ func (m QueueModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case launchedMsg:
 		if msg.err != nil {
 			m.notice = "could not open the browser: " + msg.err.Error()
+		} else if msg.copied {
+			m.notice = "copied link"
 		}
 		return m, nil
 
