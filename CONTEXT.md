@@ -26,6 +26,25 @@ A contiguous run of lines within one hunk of one file, chosen with `v` or a
 mouse drag; the target of a Draft or a Yank.
 _Avoid_: Range, multi-line note, visual selection
 
+### Pull request
+
+**Overview**:
+The panel showing a pull request's header, its Checks and its Description.
+_Avoid_: Info, details, sidebar
+
+**Description**:
+The pull request's body text, written in Markdown.
+_Avoid_: Body (in user-facing text), summary
+
+**Check**:
+One CI status or check run on the head commit.
+_Avoid_: Status, job, CI
+
+**Required check**:
+A Check that branch protection requires. Unknown on a host that cannot say,
+which the Overview states rather than guessing.
+_Avoid_: Blocking check
+
 ### Clipboard
 
 **Yank**:

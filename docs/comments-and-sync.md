@@ -35,11 +35,37 @@ original path at the end of the document. They are never silently dropped.
 New or edited activity expands a normally collapsed thread for the rest of the
 session.
 
-Each comment is one line when unfocused. Under the cursor it preserves line
-breaks and indentation, wraps to the terminal, and expands to at most eight
-lines. An overflow marker indicates more content. `enter` opens a full-height
-scrollable view; `j` and `k` or the mouse wheel scroll it, and `enter`,
-`esc`, or `q` closes it.
+Comments, threads and drafts are Markdown, and are rendered as such: headings,
+lists, quotes, tables, links and fenced code through the syntax highlighter
+(see [Rendering](rendering.md)). A ` ```suggestion ` block is drawn as the
+change it proposes, the anchored lines as `−` and the proposed ones as `+`;
+when the anchor cannot be trusted — an outdated thread, a draft that needs
+re-anchoring, or lines the current diff does not show — it falls back to a
+code block labelled `suggestion`. The draft and reply composers keep showing
+raw text, because that is what will be posted.
+
+Each comment is one line when unfocused, with its Markdown flattened to its
+words. Under the cursor it is rendered and expands to at most eight rendered
+lines. An overflow marker indicates more content. `enter` opens the full-height
+reader; `j` and `k` or the mouse wheel scroll it, `tab` and `shift+tab` move a
+link cursor over its links, `o` (or `enter` on a focused link) opens one, and
+`enter`, `esc`, or `q` closes it.
+
+## Overview
+
+`i` opens the Overview: the pull request's header, its Checks and its
+Description, as one scrolling page in the same reader, with `n` and `p`
+jumping between those sections. It shows the current snapshot and never opens
+by itself; `r` inside it syncs and keeps it open, holding the scroll offset
+while the page is still that long and resetting the link cursor. In a local
+review `i` says `no pull request`.
+
+Each Check is one row: its glyph, its name and workflow, how long it took —
+a running Check's elapsed time as of the snapshot — and whether it is
+required. The glyphs `✓ ✗ ● − !` mean pass, fail, running, skipped and
+stopped, so the outcome survives `NO_COLOR`. Each row links to where the
+Check reports, and the link cursor reaches it. When required status is
+unavailable the heading says so and no row claims to be required.
 
 ## Replies
 

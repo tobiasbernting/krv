@@ -86,6 +86,7 @@ hides them.
 | `s` | toggle split / unified layout for this session |
 | `r` | sync the current pull request |
 | `N` / `P` | next / previous thread with new activity |
+| `i` | the overview: description and checks |
 | `enter` | expand a thread or open a comment |
 | `enter` on `⋯` | show 20 more of the unchanged lines the diff leaves out |
 | `shift+enter` on `⋯` | show the whole gap (`alt+enter` where the terminal sends shift+enter as enter) |
@@ -264,9 +265,16 @@ prints the drafts for pasting wherever they need to go.
 
 GitHub review discussions are shown as threads. `outdated` means GitHub can no
 longer anchor a thread to the current diff; `resolved` means the discussion was
-closed. These states are independent, and neither blocks your review. Long
-comments expand to eight lines under the cursor; `enter` or a double click
-opens the complete scrollable body.
+closed. These states are independent, and neither blocks your review. Comments
+are Markdown and are rendered as such, a `suggestion` block as the change it
+proposes. Long comments expand to eight lines under the cursor; `enter` or a
+double click opens the complete scrollable body, where `tab` moves a link
+cursor and `o` opens the focused link.
+
+`i` opens the overview: the description, the checks on the head commit with
+their state and duration, and the header, on one scrolling page. `n` and `p`
+jump between those sections, `tab` walks the links — a check's row links to
+its run — and `r` syncs without leaving the page.
 
 Press `c` on any row of a thread to reply. A reply is not a draft: `enter`
 posts it to GitHub at once, and it appears in the thread without a sync. If
