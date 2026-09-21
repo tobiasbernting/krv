@@ -109,6 +109,10 @@ type Rendered struct {
 // focusMark leads the focused link, so focus reads without reverse video.
 const focusMark = "›"
 
+// FocusMark is that marker, for a caller with links of its own to focus —
+// the Overview's Checks — so one link cursor looks the same everywhere.
+const FocusMark = focusMark
+
 // Focus returns Lines with link i focused: reverse video, led by a › marker.
 // An index outside Links returns Lines unchanged.
 func (r Rendered) Focus(i int) []string {

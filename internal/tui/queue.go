@@ -199,7 +199,7 @@ func (m QueueModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, func() tea.Msg { return openMsg{sel: sel, preview: true} }
 	case "O":
 		if m.cursor < len(m.items) && m.items[m.cursor].URL != "" {
-			return m, browse(m.items[m.cursor].URL)
+			return m, browse(m.items[m.cursor].URL, nil)
 		}
 	case "enter", " ":
 		if m.cursor < len(m.items) {

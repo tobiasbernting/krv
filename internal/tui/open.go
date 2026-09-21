@@ -145,16 +145,20 @@ func (m Model) openPullRequest() (tea.Model, tea.Cmd) {
 	}
 	path, line, ok := m.openTarget()
 	if !ok {
-		return m, browse(m.src.URL)
+		return m, browse(m.src.URL, m.clip)
 	}
-	return m, browse(filesURL(m.src.URL, path, line))
+	return m, browse(filesURL(m.src.URL, path, line), m.clip)
 }
 
 // browse opens url in the system's browser, or copies it (see package
-// browser).
-func browse(url string) tea.Cmd {
+// browser). A link is copied through the review's own clipboard, so it lands
+// wherever a yank does; clip may be nil, for the queue, which has none.
+func browse(url string, clip Clipboard) tea.Cmd {
 	o := browser.New()
 	o.Start = func(name string, args ...string) error { return startProcess(exec.Command(name, args...)) }
+	if clip != nil {
+		o.Copy = clip.Copy
+	}
 	return func() tea.Msg {
 		copied, err := o.Open(url)
 		if copied {

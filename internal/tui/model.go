@@ -28,6 +28,7 @@ const (
 	modeThreads
 	modeThread
 	modeReply
+	modeOverview
 )
 
 // Options are everything New needs that is not the diff itself.
@@ -72,6 +73,10 @@ type Model struct {
 	gaps     gapState
 	headText *textCache
 
+	// pr is the pull request under review as the last snapshot had it: what
+	// the Overview shows. Nil for a local review.
+	pr *ghsrc.PR
+
 	threads         []ghsrc.Thread
 	expandedThreads map[string]bool
 	newComments     map[int64]bool
@@ -109,6 +114,7 @@ type Model struct {
 	submit      submitState
 	sync        syncState
 	detail      commentDetail
+	reader      readerState
 	reanchor    reanchorState
 	reply       replyState
 	lastPress   lastPress
@@ -163,6 +169,7 @@ func New(opts Options) Model {
 	}
 	if opts.Source.FollowUp != nil {
 		m.threads = opts.Source.FollowUp.Threads
+		m.pr = opts.Source.FollowUp.PR
 	}
 	m.blobs = Blobs(opts.Files)
 	if m.review == nil {
@@ -219,6 +226,13 @@ func (m Model) cursorAnchor() documentAnchor {
 func (m *Model) rebuildAt(anchor documentAnchor) {
 	m.doc = render.Build(m.files, m.hl, m.overlay(), m.layout.Fit(m.width))
 	m.rend = render.NewRenderer(m.theme, m.doc)
+	// The expansion under the cursor is Markdown, and a suggestion in it is
+	// the change it proposes: only this side knows which lines that replaces.
+	opts, theme, files, threads, review := m.markdownOptions(), m.theme, m.files, m.threads, m.review
+	m.rend.Markdown = func(row render.Row) render.MarkdownOptions {
+		opts.Suggestion = suggestionMiniDiff(theme, files, threads, review, row)
+		return opts
+	}
 
 	if len(m.doc.Rows) == 0 {
 		m.cursor, m.top = 0, 0
@@ -365,8 +379,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleInputKey(msg)
 	case modeSubmit:
 		return m.handleSubmitKey(msg)
-	case modeComment:
-		return m.handleCommentKey(msg)
+	case modeComment, modeOverview:
+		return m.handleReaderKey(msg)
 	case modeHelp:
 		return m.handleHelpKey(key), nil
 	case modeFiles:
@@ -389,6 +403,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showCurrentDiff("")
 	case "?":
 		m.openHelp()
+	case "i":
+		return m.openOverview()
 	case "f":
 		if len(m.doc.Rows) == 0 || len(m.doc.Files) == 0 {
 			m.err = "no files"
@@ -645,8 +661,8 @@ func (m Model) View() string {
 		if m.reply.from != modeDiff {
 			return m.followupView()
 		}
-	case modeComment:
-		return m.commentView()
+	case modeComment, modeOverview:
+		return m.readerView()
 	}
 	return m.diffView()
 }
@@ -760,6 +776,14 @@ func (m Model) hintKeys() []string {
 		}
 	case modeComment:
 		return []string{
+			"j/k scroll  tab link  o open  esc back",
+			"j/k scroll  tab link  esc back",
+			"esc back",
+		}
+	case modeOverview:
+		return []string{
+			"j/k scroll  n/p section  tab link  o open  r sync  esc back",
+			"j/k scroll  n/p section  tab link  esc back",
 			"j/k scroll  esc back",
 			"esc back",
 		}
@@ -771,6 +795,17 @@ func (m Model) hintKeys() []string {
 		}
 	}
 	if m.src.CanSubmit() {
+		if m.hasDescription() {
+			// A pull request with something to read is worth saying so, on
+			// the terminals wide enough to say it without crowding the rest.
+			return []string{
+				"c comment  x reviewed  t threads  i overview  a changes  D PR diff  r sync  S submit  ? help  q quit",
+				"c comment  x reviewed  t threads  i overview  r sync  S submit  ? help  q quit",
+				"c comment  x reviewed  i overview  S submit  ? help",
+				"c comment  S submit  ? help",
+				"? help",
+			}
+		}
 		return []string{
 			"c comment  y copy  x reviewed  t threads  a changes  D PR diff  r sync  S submit  ? help  q quit",
 			"c comment  x reviewed  t threads  r sync  S submit  ? help  q quit",
