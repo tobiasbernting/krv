@@ -54,12 +54,34 @@ func NewHighlighter(styleName string, enabled bool) *Highlighter {
 // Lines highlights source and returns one segment slice per line. The result
 // always has exactly as many entries as source has lines.
 func (h *Highlighter) Lines(path, source string) [][]Segment {
+	return h.lines(path, source, func() chroma.Lexer { return lexers.Match(path) })
+}
+
+// Lang highlights source written in a named language — a Markdown fence's
+// info string, such as "go" or "python" — rather than guessing it from a file
+// name. An unknown name is tried as a file extension, then as plain text.
+func (h *Highlighter) Lang(lang, source string) [][]Segment {
+	lang = strings.ToLower(strings.TrimSpace(lang))
+	return h.lines("\x00lang\x00"+lang, source, func() chroma.Lexer {
+		if lang == "" {
+			return nil
+		}
+		if l := lexers.Get(lang); l != nil {
+			return l
+		}
+		return lexers.Match("file." + lang)
+	})
+}
+
+// lines tokenises source with the lexer find returns, memoised under lexKey.
+// A nil Highlighter highlights nothing, so callers need not check.
+func (h *Highlighter) lines(lexKey, source string, find func() chroma.Lexer) [][]Segment {
 	plain := splitPlain(source)
-	if !h.enabled {
+	if h == nil || !h.enabled {
 		return plain
 	}
 
-	key := path + "\x00" + source
+	key := lexKey + "\x00" + source
 	h.mu.Lock()
 	cached, ok := h.cache[key]
 	h.mu.Unlock()
@@ -67,7 +89,7 @@ func (h *Highlighter) Lines(path, source string) [][]Segment {
 		return cached
 	}
 
-	it, err := h.lexerFor(path).Tokenise(nil, source)
+	it, err := h.lexerFor(lexKey, find).Tokenise(nil, source)
 	if err != nil {
 		return plain
 	}
@@ -120,18 +142,18 @@ func emphasised(t chroma.TokenType) bool {
 	return false
 }
 
-func (h *Highlighter) lexerFor(path string) chroma.Lexer {
+func (h *Highlighter) lexerFor(key string, find func() chroma.Lexer) chroma.Lexer {
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	if l, ok := h.lexers[path]; ok {
+	if l, ok := h.lexers[key]; ok {
 		return l
 	}
-	l := lexers.Match(path)
+	l := find()
 	if l == nil {
 		l = lexers.Fallback
 	}
 	l = chroma.Coalesce(l)
-	h.lexers[path] = l
+	h.lexers[key] = l
 	return l
 }
 

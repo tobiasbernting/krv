@@ -32,6 +32,7 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 	"github.com/tobiasbernting/krv/v2/internal/diffparse"
 )
@@ -465,6 +466,12 @@ type Renderer struct {
 	Theme Theme
 	Doc   *Document
 
+	// Markdown, when set, draws the body of an expanded annotation — the one
+	// under the cursor — as Markdown with the options it returns for that row;
+	// Fg and Bg are filled in with the panel's own. Nil keeps bodies as
+	// wrapped text, which is what plain output prints.
+	Markdown func(row Row) MarkdownOptions
+
 	mu     sync.Mutex
 	styles map[styleKey]lipgloss.Style
 	muted  map[[2]string]string
@@ -886,6 +893,48 @@ func (r *Renderer) RenderLines(row Row, width, hoffset int, cursor bool, maxLine
 	if contentWidth < 1 {
 		return []string{r.pad("", width, bg)}
 	}
+	bodyFg := t.NoteBodyFg
+	if a.NeedsReanchor || a.Outdated || a.Resolved {
+		bodyFg = t.StaleFg
+	}
+
+	// panelLine draws one line of the annotation: its edge, the indent that
+	// lines it up under the code, and the content. Who is speaking stays in
+	// the annotation's own colour and weight; what they said takes the body
+	// colour, so it reads like prose.
+	panelLine := func(i int, head, content string) string {
+		var b strings.Builder
+		b.WriteString(r.style(edgeFg, bg).Render(edge))
+		pad := indent - 1
+		if i > 0 {
+			pad += noteHang
+		}
+		b.WriteString(r.style("", bg).Render(strings.Repeat(" ", pad)))
+		if head != "" {
+			b.WriteString(r.bold(fg, bg).Render(head))
+		}
+		b.WriteString(content)
+		return r.pad(b.String(), width, bg)
+	}
+
+	// A thread's summary row is a label, not prose, so only a comment or a
+	// draft is worth a Markdown pass.
+	if r.Markdown != nil && maxLines != 1 && a.Kind != AnnThread {
+		opts := r.Markdown(row)
+		opts.Fg, opts.Bg = bodyFg, bg
+		label := annotationLabel(a) + ": "
+		body := markdownBody(a.Body, label, contentWidth, maxLines, opts, r.style(bodyFg, bg))
+		lines := make([]string, len(body))
+		for i, content := range body {
+			head := ""
+			if i == 0 {
+				head = label
+			}
+			lines[i] = panelLine(i, head, content)
+		}
+		return lines
+	}
+
 	label, body := splitLabel(annotationText(a, maxLines == 1))
 	wrapped := WrapText(label+body, contentWidth)
 	if maxLines > 0 && len(wrapped) > maxLines {
@@ -896,33 +945,40 @@ func (r *Renderer) RenderLines(row Row, width, hoffset int, cursor bool, maxLine
 			wrapped[maxLines-1] = runewidth.Truncate(wrapped[maxLines-1], contentWidth-1, "") + "…"
 		}
 	}
-
-	bodyFg := t.NoteBodyFg
-	if a.NeedsReanchor || a.Outdated || a.Resolved {
-		bodyFg = t.StaleFg
-	}
-
 	lines := make([]string, 0, len(wrapped))
-	for i, line := range wrapped {
-		var b strings.Builder
-		b.WriteString(r.style(edgeFg, bg).Render(edge))
-		pad := indent - 1
-		if i > 0 {
-			pad += noteHang
-		}
-		b.WriteString(r.style("", bg).Render(strings.Repeat(" ", pad)))
-		// Who is speaking stays in the annotation's own colour and weight;
-		// what they said takes the body colour, so it reads like prose.
+	for i, text := range wrapped {
 		head := ""
-		if i == 0 && strings.HasPrefix(line, label) {
+		if i == 0 && strings.HasPrefix(text, label) {
 			head = label
-			line = strings.TrimPrefix(line, label)
+			text = strings.TrimPrefix(text, label)
 		}
-		if head != "" {
-			b.WriteString(r.bold(fg, bg).Render(head))
-		}
-		b.WriteString(r.style(bodyFg, bg).Render(clip(line, contentWidth-lipgloss.Width(head))))
-		lines = append(lines, r.pad(b.String(), width, bg))
+		lines = append(lines, panelLine(i, head, r.style(bodyFg, bg).Render(clip(text, contentWidth-lipgloss.Width(head)))))
+	}
+	return lines
+}
+
+// minBeside is the narrowest room beside a label that a one-line Markdown
+// body is still set in; with less than that it starts on the line below.
+const minBeside = 12
+
+// markdownBody lays an annotation's body out as Markdown after its label:
+// beside it when it is one line there, else from the next line on. The first
+// entry is what follows the label and the rest hang under it. Past maxLines
+// lines in all, the last one kept ends in the overflow marker.
+func markdownBody(src, label string, width, maxLines int, opts MarkdownOptions, marker lipgloss.Style) []string {
+	beside := width - runewidth.StringWidth(label)
+	var lines []string
+	if md := Markdown(src, beside, opts); beside >= minBeside && len(md.Lines) <= 1 {
+		lines = append(lines, md.Lines...)
+	}
+	if lines == nil {
+		lines = append([]string{""}, Markdown(src, width, opts).Lines...)
+	}
+	if maxLines > 0 && len(lines) > maxLines {
+		lines = lines[:maxLines]
+		// Escape sequences past the cut survive it, so a hyperlink cut in
+		// half still ends.
+		lines[maxLines-1] = ansi.Truncate(lines[maxLines-1], maxi(width-1, 0), "") + marker.Render("…")
 	}
 	return lines
 }
@@ -965,11 +1021,22 @@ func annotationText(a *Annotation, compact bool) string {
 			label += " [updated]"
 		}
 		if a.Collapsed && a.Body != "" {
-			label += ": " + a.Author + ": " + flatten(a.Body)
+			label += ": " + a.Author + ": " + MarkdownPlain(a.Body)
 		}
 		return marker + label
 	}
 
+	body := a.Body
+	if compact {
+		// One line has room for the words of a body, not for its structure.
+		body = MarkdownPlain(body)
+	}
+	return annotationLabel(a) + ": " + body
+}
+
+// annotationLabel is who is speaking on a comment or a draft, with its state
+// badges and its line range: everything before the body.
+func annotationLabel(a *Annotation) string {
 	label := "you"
 	if a.Author != "" {
 		label = a.Author
@@ -996,15 +1063,7 @@ func annotationText(a *Annotation, compact bool) string {
 	if a.StartLine > 0 && a.StartLine != a.Line {
 		label += fmt.Sprintf(" L%d-%d", a.StartLine, a.Line)
 	}
-	body := a.Body
-	if compact {
-		body = flatten(body)
-	}
-	return label + ": " + body
-}
-
-func flatten(s string) string {
-	return strings.Join(strings.Fields(strings.ReplaceAll(s, "\n", " ")), " ")
+	return label
 }
 
 func pluralWord(n int) string {

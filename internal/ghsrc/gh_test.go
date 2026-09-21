@@ -113,14 +113,14 @@ func TestParseThreadStatesAcceptEmptyPullRequest(t *testing.T) {
 
 func TestSnapshotRetriesWhenHeadMoves(t *testing.T) {
 	var prCalls, diffCalls int
-	client := Client{runOverride: func(_ []byte, args ...string) (string, error) {
+	client := Client{runOverride: func(stdin []byte, args ...string) (string, error) {
 		joined := strings.Join(args, " ")
 		switch {
-		case strings.HasPrefix(joined, "pr view"):
+		case isPRQuery(stdin):
 			shas := []string{"a", "b", "c", "c"}
 			sha := shas[prCalls]
 			prCalls++
-			return fmt.Sprintf(`{"number":1,"headRefOid":%q}`, sha), nil
+			return prResponse(sha), nil
 		case strings.HasPrefix(joined, "pr diff"):
 			diffCalls++
 			return "", nil

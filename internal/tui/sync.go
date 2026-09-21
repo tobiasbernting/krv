@@ -130,6 +130,9 @@ func (m Model) applySyncResult(msg syncResultMsg) (tea.Model, tea.Cmd) {
 	m.threads = msg.snapshot.Threads.Threads
 	m.src.HeadSHA = msg.snapshot.HeadSHA
 	m.fileCursor = 0
+	if msg.snapshot.PR != nil {
+		m.pr = msg.snapshot.PR
+	}
 	if msg.snapshot.PR != nil && m.src.FollowUp != nil {
 		s := followup.FromSnapshot(msg.snapshot)
 		m.src.FollowUp, m.src.Viewer, m.src.Author = s, s.Viewer, s.PR.Author.Login
@@ -162,15 +165,31 @@ func (m Model) applySyncResult(msg syncResultMsg) (tea.Model, tea.Cmd) {
 	}
 	if changesView && m.follow.session != nil {
 		if m.follow.session.Comparison != nil {
-			return m.showChanges()
+			next, cmd := m.showChanges()
+			m = next.(Model)
+			m.keepOverview(previousMode)
+			return m, cmd
 		}
 		m.mode = modeDiff
 		m.err = m.follow.session.ComparisonError
 	}
+	m.keepOverview(previousMode)
 	if m.mode == modeThread {
 		return m, m.loadThreadContext()
 	}
 	return m, nil
+}
+
+// keepOverview leaves the Overview open across a sync it was started from,
+// whatever else the fresh snapshot did to the screen. Its scroll offset
+// stands, clamped to the new page when that is shorter; the link cursor
+// resets, because the links it counted are not these.
+func (m *Model) keepOverview(previous mode) {
+	if previous != modeOverview {
+		return
+	}
+	m.mode = modeOverview
+	m.reader.focus = -1
 }
 
 func compareThreads(old, fresh []ghsrc.Thread) (map[int64]bool, map[int64]bool, syncChanges) {

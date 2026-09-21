@@ -260,6 +260,77 @@ away from the cursor — one line, ending in `…` if there is more — and `8` 
 the one under it, which is what makes the cursor the reading position. Plain
 output passes `0`, meaning no limit, because a file has no cursor.
 
+## Markdown
+
+PR descriptions and review comments are Markdown. `render.Markdown(src,
+width, opts)` draws them as styled lines; `render.MarkdownPlain(src)`
+flattens them to one plain line for a collapsed row.
+
+goldmark parses — CommonMark plus the GFM tables, strikethrough, autolinks
+and task lists — and everything after the parse is krv's own, in
+`markdown*.go`. Blocks lay out into lines of **cells**: one character each,
+carrying its style and the link it belongs to. Painting comes last. Cells are
+why a link's position survives wrapping, and why a focused link can be
+repainted without laying the page out again.
+
+| element | drawn as |
+| --- | --- |
+| heading | bold, `Accent` for levels 1–2; `#`/`##`… in front without colour |
+| emphasis, strong, strikethrough | italic, bold, struck through |
+| inline code | `FileFg` on `HunkBg`; in backticks without colour |
+| list | `•` `◦` `▪` by depth, numbers right-aligned, text hanging under its marker |
+| task | `[ ]` / `[x]` in the bullet's place (after the number in an ordered list) |
+| block quote | `│ ` on every line, text in `Dim` |
+| code block | an indented `HunkBg` panel, highlighted by the fence's language (`Highlighter.Lang`); long lines wrap |
+| table | columns aligned as the delimiter row says, a `─` rule under the header; too wide, the widest column gives way and cells end in `…` |
+| thematic break | a `─` rule |
+| link, autolink | its text, `Accent` and underlined |
+| image | `[image: alt]` or `[image]`, a link to the URL; nothing is fetched |
+
+Raw HTML is PR-template furniture, and none of it is rendered as HTML: tags
+are stripped and their text kept, `<!-- -->` comments dropped, `<details>` is
+always open with its `<summary>` as a bold `▾` line, `<br>` breaks the line,
+`<img>` is an image and `<a href>` a link. `<b>`, `<i>`, `<s>`, `<code>` keep
+their styling. An image inside a link — a badge — belongs to the link.
+
+Text wraps one column short of the width, and every line is padded to the
+width in `opts.Bg` (the theme's `Bg` by default; an annotation panel passes
+its own). Wide characters break anywhere, since CJK text has no spaces to
+break at. Control characters are stripped from text and URLs: a PR
+description is someone else's text, and its escape sequences must not reach
+the terminal.
+
+Colour follows the rest of the package: lipgloss drops styling when there is
+no colour to give, and the renderer then says with glyphs what colour said
+(heading markers, backticks). `opts.NoColor` forces that, and turns off
+syntax colour, for `--no-color` on a colour terminal.
+
+### Links and focus
+
+`Rendered.Links` lists every link in reading order — the order a link cursor
+visits them — with its URL, its kind (`LinkURL` or `LinkImage`), its text and
+one `LinkSpan{Line, Start, End}` per line it occupies, in display columns of
+`Rendered.Lines`. `LinkAt(line, col)` resolves a mouse click.
+
+A link cursor is the caller's: it keeps an index and prints
+`Rendered.Focus(i)` instead of `Lines`. The focused link is drawn in reverse
+video behind a `›` marker, which is what keeps focus visible with colour off.
+The marker is why text wraps a column short: it always fits. Positions stay
+those of `Lines`; on the focused link's first line, everything from the link
+on sits one column to the right.
+
+`opts.Hyperlinks` wraps every link in an OSC 8 hyperlink, so a terminal that
+supports them can open it on click. Leave it off for anything that is not a
+live terminal.
+
+### Suggestions
+
+A ` ```suggestion ` block goes to `opts.Suggestion(proposed, width)`, which
+only the caller can answer — it knows which lines the suggestion replaces. It
+returns painted lines and `true`; they are placed as they are, behind any
+list indent or quote bar. A nil hook, or `false`, draws the block as a code
+block labelled `suggestion`.
+
 ## Tests
 
 ```sh
@@ -278,6 +349,7 @@ goldens stay readable diffs of *layout* rather than walls of escape codes:
 | `testdata/dense.golden` | rename, mode change, word diffs, over-wide lines, a conversation with state badges, a focused row |
 | `testdata/dense-compact.golden` | the same, compact |
 | `testdata/basic-split.golden` / `dense-split.golden` | the same diffs in split at width 160: pairing, filler, per-pane markers and overflow |
+| `testdata/markdown-pr.golden` | a templated PR description at width 60 — comments, a checklist, `<details>`, a table, code, CJK — and its links |
 
 Colour is tested where colour lives: `theme_test.go` checks role completeness,
 the aliases, that light and dark disagree about which end of the scale text

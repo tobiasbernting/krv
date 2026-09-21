@@ -47,6 +47,8 @@ func TestEditorCallByEditor(t *testing.T) {
 // fakeStart records the programs krv starts instead of starting them.
 func fakeStart(t *testing.T) *[][]string {
 	t.Helper()
+	// Over SSH a link is copied, not opened; these tests are about opening.
+	t.Setenv("SSH_CONNECTION", "")
 	var started [][]string
 	orig := startProcess
 	startProcess = func(cmd *exec.Cmd) error {
@@ -80,6 +82,14 @@ func TestOpenPullRequestAtTheLine(t *testing.T) {
 	want := filesURL("https://github.com/acme/x/pull/7", "a.go", 2)
 	if len(*started) != 1 || (*started)[0][len((*started)[0])-1] != want {
 		t.Errorf("started %q, want the Files tab at %s", *started, want)
+	}
+}
+
+func TestCopiedLinkIsReported(t *testing.T) {
+	m, _ := newYankModel(t, render.ModeUnified)
+	next, _ := m.Update(launchedMsg{copied: true})
+	if bar := next.(Model).statusBar(); !strings.Contains(bar, "copied link") {
+		t.Errorf("no status:\n%s", bar)
 	}
 }
 

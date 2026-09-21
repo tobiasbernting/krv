@@ -1,0 +1,42 @@
+## Summary
+
+Replaces the retry loop in `fetch` with exponential
+backoff, as discussed in #123. See also
+https://example.com/design-doc.
+
+### Checklist
+
+[x] Tests added
+[ ] Docs updated
+[x] Changelog entry
+    ◦ under Unreleased
+    ◦ with a link
+
+## How to test
+
+1. Run the server.
+2. Kill the network:
+      sudo ifconfig en0 down
+3. Watch it back off.
+
+│ Note The old behaviour hammered the API — see the graph
+│ below.
+
+[image: latency graph]
+
+▾ Benchmark results
+
+case  before  after
+────  ──────  ─────
+cold   120ms   80ms
+warm    40ms   38ms
+
+───────────────────────────────────────────────────────────
+
+Closes #123. 日本語のメモ：再試行の間隔は指数的に伸びます。
+Thanks!
+
+links:
+0 link "#123" https://github.com/o/r/issues/123 3:25-29
+1 link "https://example.com/design-doc" https://example.com/design-doc 4:0-30
+2 image "[image: latency graph]" https://example.com/graph.png 24:0-22

@@ -58,7 +58,10 @@ func (m Model) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		return m.handleListMouse(msg)
 	case modeThreads:
 		return m.handleListMouse(msg)
-	case modeThread, modeComment, modeHelp:
+	case modeComment, modeOverview:
+		// The reader has links of its own, so a click can open one.
+		return m.handleReaderMouse(msg)
+	case modeThread, modeHelp:
 		// Documents scroll with j and k, so the wheel is those keys.
 		switch msg.Button {
 		case tea.MouseButtonWheelDown:

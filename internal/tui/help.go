@@ -21,6 +21,7 @@ type helpSection struct {
 }
 
 func inFollowUp(m Model) bool   { return m.follow.session != nil }
+func withPR(m Model) bool       { return m.src.Kind == SourcePR }
 func withMouse(m Model) bool    { return m.cfg.Mouse }
 func fromQueue(m Model) bool    { return m.fromQueue }
 func notFromQueue(m Model) bool { return !m.fromQueue }
@@ -43,10 +44,20 @@ var helpContent = []helpSection{
 		{keys: "s", desc: "split or unified layout, for this session"},
 		{keys: "f", desc: "file list"},
 		{keys: "x", desc: "mark this file reviewed, and move on"},
+		{keys: "i", desc: "overview: description and checks", only: withPR},
 		{keys: "enter", desc: "expand a thread, or open a comment in full"},
 		{keys: "enter on ⋯", desc: "show 20 more unchanged lines"},
 		{keys: "shift+enter on ⋯", desc: "show the whole gap"},
 		{keys: "alt+enter on ⋯", desc: "the same, where shift+enter reads as enter"},
+	}},
+	{title: "Reading", entries: []helpEntry{
+		{keys: "j / k, wheel", desc: "in the overview or a comment: scroll"},
+		{keys: "tab / shift+tab", desc: "next / previous link"},
+		{keys: "o", desc: "open the focused link; enter does too"},
+		{keys: "click", desc: "open a link", only: withMouse},
+		{keys: "n / p", desc: "next / previous section of the overview", only: withPR},
+		{keys: "r", desc: "sync, and stay in the overview", only: withPR},
+		{keys: "esc, q", desc: "close; enter closes when no link is focused"},
 	}},
 	{title: "Comment", entries: []helpEntry{
 		{keys: "c", desc: "draft a comment on this line or the selection"},
@@ -227,9 +238,13 @@ func (m *Model) openHelp() {
 	m.helpReturn = m.mode
 	m.mode = modeHelp
 	m.helpTop = 0
-	if m.helpReturn == modeThreads || m.helpReturn == modeThread {
+	switch m.helpReturn {
+	case modeThreads, modeThread:
 		_, titleAt := m.helpLines()
 		m.helpTop = m.clampHelpTop(titleAt["Follow-up"])
+	case modeComment, modeOverview:
+		_, titleAt := m.helpLines()
+		m.helpTop = m.clampHelpTop(titleAt["Reading"])
 	}
 }
 

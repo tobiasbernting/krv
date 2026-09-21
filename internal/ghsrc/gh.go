@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ErrNotInstalled is returned when gh is missing, so callers can tell the
@@ -88,18 +89,159 @@ type PR struct {
 		Login string `json:"login"`
 	} `json:"author"`
 	IsDraft bool `json:"isDraft"`
+
+	// Checks are the head commit's CI statuses and check runs, sorted with
+	// SortChecks. RequiredKnown is false when the host could not say which
+	// are required (older GitHub Enterprise), so no Check claims to be.
+	Checks        []Check `json:"-"`
+	RequiredKnown bool    `json:"-"`
 }
 
+// prQuery fetches the header and the head commit's Checks in one request.
+// The isRequired field is spliced in, so the same query can be asked again
+// without it of a host whose schema lacks the field.
+const prQuery = `query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      number title body state url baseRefName headRefName headRefOid isDraft
+      author { login }
+      commits(last: 1) { nodes { commit { statusCheckRollup { contexts(first: 100) { nodes {
+        __typename
+        ... on CheckRun {
+          name status conclusion startedAt completedAt detailsUrl
+          checkSuite { workflowRun { workflow { name } } }
+          %[1]s
+        }
+        ... on StatusContext {
+          context state targetUrl createdAt
+          %[1]s
+        }
+      } } } } } }
+    }
+  }
+}`
+
+const isRequiredField = "isRequired(pullRequestNumber: $number)"
+
+// PR fetches a pull request's header and Checks from the client's Repo, or
+// the working directory's. A host without isRequired is asked again without
+// it, and the PR says required status is unknown.
 func (c Client) PR(number int) (*PR, error) {
-	out, err := c.run(c.prArgs("view", strconv.Itoa(number), "--json",
-		"number,title,body,state,url,baseRefName,headRefName,headRefOid,author,isDraft")...)
+	repo, err := c.CurrentRepo()
 	if err != nil {
 		return nil, err
 	}
-	var pr PR
-	if err := json.Unmarshal([]byte(out), &pr); err != nil {
-		return nil, fmt.Errorf("could not read pull request %d: %w", number, err)
+	owner, name, ok := strings.Cut(repo, "/")
+	if !ok || owner == "" || name == "" {
+		return nil, fmt.Errorf("invalid GitHub repository %q", repo)
 	}
+	vars := map[string]any{"owner": owner, "name": name, "number": number}
+
+	// The query goes on stdin, so an error names the field GitHub rejected
+	// and never merely echoes the query back.
+	requiredKnown := true
+	var data prData
+	err = c.graphql(fmt.Sprintf(prQuery, isRequiredField), vars, &data)
+	if err != nil && strings.Contains(err.Error(), "isRequired") {
+		requiredKnown, data = false, prData{}
+		err = c.graphql(fmt.Sprintf(prQuery, ""), vars, &data)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return data.pr(number, requiredKnown)
+}
+
+// prContext is one node of a status check rollup: a CheckRun or a
+// StatusContext, told apart by __typename.
+type prContext struct {
+	Typename    string     `json:"__typename"`
+	Name        string     `json:"name"`
+	Status      string     `json:"status"`
+	Conclusion  string     `json:"conclusion"`
+	StartedAt   *time.Time `json:"startedAt"`
+	CompletedAt *time.Time `json:"completedAt"`
+	DetailsURL  string     `json:"detailsUrl"`
+	CheckSuite  *struct {
+		WorkflowRun *struct {
+			Workflow *struct {
+				Name string `json:"name"`
+			} `json:"workflow"`
+		} `json:"workflowRun"`
+	} `json:"checkSuite"`
+	Context    string     `json:"context"`
+	State      string     `json:"state"`
+	TargetURL  string     `json:"targetUrl"`
+	CreatedAt  *time.Time `json:"createdAt"`
+	IsRequired bool       `json:"isRequired"`
+}
+
+func (n prContext) check() (Check, bool) {
+	at := func(t *time.Time) time.Time {
+		if t == nil {
+			return time.Time{}
+		}
+		return *t
+	}
+	switch n.Typename {
+	case "CheckRun":
+		check := Check{
+			Name: n.Name, Status: checkRunStatus(n.Status, n.Conclusion),
+			StartedAt: at(n.StartedAt), CompletedAt: at(n.CompletedAt), URL: n.DetailsURL,
+		}
+		if s := n.CheckSuite; s != nil && s.WorkflowRun != nil && s.WorkflowRun.Workflow != nil {
+			check.Workflow = s.WorkflowRun.Workflow.Name
+		}
+		return check, true
+	case "StatusContext":
+		return Check{
+			Name: n.Context, Status: statusContextStatus(n.State),
+			StartedAt: at(n.CreatedAt), URL: n.TargetURL,
+		}, true
+	}
+	return Check{}, false
+}
+
+// prData is prQuery's answer.
+type prData struct {
+	Repository *struct {
+		PullRequest *struct {
+			PR
+			Commits struct {
+				Nodes []struct {
+					Commit struct {
+						StatusCheckRollup *struct {
+							Contexts struct {
+								Nodes []prContext `json:"nodes"`
+							} `json:"contexts"`
+						} `json:"statusCheckRollup"`
+					} `json:"commit"`
+				} `json:"nodes"`
+			} `json:"commits"`
+		} `json:"pullRequest"`
+	} `json:"repository"`
+}
+
+func (d prData) pr(number int, requiredKnown bool) (*PR, error) {
+	if d.Repository == nil || d.Repository.PullRequest == nil {
+		return nil, fmt.Errorf("could not read pull request %d: GitHub returned no data", number)
+	}
+	node := d.Repository.PullRequest
+	pr := node.PR
+	pr.RequiredKnown = requiredKnown
+	for _, commit := range node.Commits.Nodes {
+		// A commit nothing reported on has a null rollup: no Checks.
+		if commit.Commit.StatusCheckRollup == nil {
+			continue
+		}
+		for _, n := range commit.Commit.StatusCheckRollup.Contexts.Nodes {
+			if check, ok := n.check(); ok {
+				check.Required = requiredKnown && n.IsRequired
+				pr.Checks = append(pr.Checks, check)
+			}
+		}
+	}
+	SortChecks(pr.Checks)
 	return &pr, nil
 }
 

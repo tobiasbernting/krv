@@ -1,16 +1,19 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/tobiasbernting/krv/v2/internal/render"
 )
 
+// commentDetail is the comment or draft the reader is showing. The row it
+// came from is kept so a suggestion in it can still find the lines it
+// proposes to replace.
 type commentDetail struct {
 	annotation render.Annotation
-	offset     int
+	row        render.Row
 }
 
 func (m Model) openOrToggleComment() (tea.Model, tea.Cmd) {
@@ -26,51 +29,15 @@ func (m Model) openOrToggleComment() (tea.Model, tea.Cmd) {
 		m.rebuild()
 		return m, nil
 	}
-	m.detail = commentDetail{annotation: *row.Ann}
+	m.detail = commentDetail{annotation: *row.Ann, row: row}
 	m.mode = modeComment
+	m.reader = readerState{focus: -1}
 	return m, nil
 }
 
-func (m Model) handleCommentKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	visible := m.viewportHeight() - 3
-	if visible < 1 {
-		visible = 1
-	}
-	lines := render.WrapText(m.detail.annotation.Body, max(1, m.width-4))
-	maxOffset := len(lines) - visible
-	if maxOffset < 0 {
-		maxOffset = 0
-	}
-	switch msg.String() {
-	case "esc", "q", "enter":
-		m.mode = modeDiff
-	case "j", "down":
-		if m.detail.offset < maxOffset {
-			m.detail.offset++
-		}
-	case "k", "up":
-		if m.detail.offset > 0 {
-			m.detail.offset--
-		}
-	case "ctrl+d", "pgdown":
-		m.detail.offset += visible / 2
-		if m.detail.offset > maxOffset {
-			m.detail.offset = maxOffset
-		}
-	case "ctrl+u", "pgup":
-		m.detail.offset -= visible / 2
-		if m.detail.offset < 0 {
-			m.detail.offset = 0
-		}
-	case "g", "home":
-		m.detail.offset = 0
-	case "G", "end":
-		m.detail.offset = maxOffset
-	}
-	return m, nil
-}
-
-func (m Model) commentView() string {
+// commentPage is the comment or draft in full, as Markdown, with its state
+// in the title above it.
+func (m Model) commentPage() page {
 	a := m.detail.annotation
 	title := a.Author
 	if title == "" {
@@ -100,23 +67,27 @@ func (m Model) commentView() string {
 		title += " [" + strings.Join(states, ", ") + "]"
 	}
 
-	lines := render.WrapText(a.Body, max(1, m.width-4))
-	visible := m.viewportHeight() - 3
-	if visible < 1 {
-		visible = 1
+	st := lipgloss.NewStyle().
+		Foreground(lipgloss.Color(m.theme.CommentFg)).
+		Background(lipgloss.Color(m.theme.Bg)).Bold(true)
+
+	p := page{title: st.Render(clipText(title, m.readerWidth()))}
+	opts := m.markdownOptions()
+	opts.Suggestion = m.suggestionMiniDiff(m.detail.row)
+	p.markdown(render.Markdown(a.Body, m.readerWidth(), opts))
+	return p
+}
+
+// markdownOptions is how krv draws Markdown in the live terminal: the
+// review's theme, code through its highlighter, and every link an OSC 8
+// hyperlink so the terminal can open it on a click of its own.
+func (m Model) markdownOptions() render.MarkdownOptions {
+	return render.MarkdownOptions{
+		Theme:       m.theme,
+		Highlighter: m.hl,
+		NoColor:     !m.cfg.Color,
+		Hyperlinks:  true,
 	}
-	var b strings.Builder
-	fmt.Fprintf(&b, "  %s\n\n", title)
-	for i := 0; i < visible; i++ {
-		idx := m.detail.offset + i
-		if idx < len(lines) {
-			b.WriteString("  " + lines[idx])
-		}
-		b.WriteString("\n")
-	}
-	left := fmt.Sprintf(" %d/%d", min(m.detail.offset+1, max(1, len(lines))), max(1, len(lines)))
-	b.WriteString(bar(m.theme, m.width, left, fitHint(m.width, left, m.hintKeys())))
-	return b.String()
 }
 
 func (m *Model) jumpActivity(dir int) {

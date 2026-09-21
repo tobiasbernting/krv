@@ -19,9 +19,9 @@ func submitTestModel(t *testing.T, remoteHead string) (Model, string) {
 	t.Setenv("TUI_SUBMIT_TEST_HEAD", remoteHead)
 	t.Setenv("TUI_SUBMIT_TEST_PAYLOAD", payloadPath)
 	script := `#!/bin/sh
-case "$1" in
-pr) printf '{"headRefOid":"%s"}\n' "$TUI_SUBMIT_TEST_HEAD" ;;
-api) cat > "$TUI_SUBMIT_TEST_PAYLOAD"; printf '{}\n' ;;
+case "$1 $2" in
+"api graphql") printf '{"data":{"repository":{"pullRequest":{"headRefOid":"%s"}}}}\n' "$TUI_SUBMIT_TEST_HEAD" ;;
+api*) cat > "$TUI_SUBMIT_TEST_PAYLOAD"; printf '{}\n' ;;
 *) exit 1 ;;
 esac
 `
