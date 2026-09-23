@@ -16,8 +16,8 @@ import (
 
 // openerFor returns an opener that serves a small review for any selection
 // and records what it was asked for.
-func openerFor(t *testing.T, asked *[]Selection) func(Selection) (Options, error) {
-	return func(sel Selection) (Options, error) {
+func openerFor(t *testing.T, asked *[]Selection) func(Selection, *ghsrc.Tracer) (Options, error) {
+	return func(sel Selection, _ *ghsrc.Tracer) (Options, error) {
 		if asked != nil {
 			*asked = append(*asked, sel)
 		}
@@ -31,7 +31,7 @@ func openerFor(t *testing.T, asked *[]Selection) func(Selection) (Options, error
 	}
 }
 
-func newApp(t *testing.T, open func(Selection) (Options, error)) App {
+func newApp(t *testing.T, open func(Selection, *ghsrc.Tracer) (Options, error)) App {
 	t.Helper()
 	q := newQueue(t)
 	// The list never comes from gh in tests; returning to it reloads the
@@ -189,9 +189,9 @@ func TestAppQWaitsForGitHubBeforeLeaving(t *testing.T) {
 func TestAppEscCancelsALoad(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
-	slow := func(sel Selection) (Options, error) {
+	slow := func(sel Selection, _ *ghsrc.Tracer) (Options, error) {
 		<-release
-		return openerFor(t, nil)(sel)
+		return openerFor(t, nil)(sel, nil)
 	}
 	a := newApp(t, slow)
 	a, _ = pressA(t, a, "enter")
@@ -205,7 +205,7 @@ func TestAppEscCancelsALoad(t *testing.T) {
 		t.Fatalf("esc did not return to the queue (quit=%v, screen=%v)", quit, a.screen)
 	}
 
-	opts, _ := openerFor(t, nil)(Selection{Repo: "acme/x", Number: 8})
+	opts, _ := openerFor(t, nil)(Selection{Repo: "acme/x", Number: 8}, nil)
 	next, _ := a.Update(openedMsg{gen: loading, opts: opts})
 	if next.(App).screen != screenQueue {
 		t.Error("a cancelled load still opened its review")
@@ -219,7 +219,7 @@ func loadingApp(t *testing.T, width, height int) App {
 	t.Helper()
 	release := make(chan struct{})
 	t.Cleanup(func() { close(release) })
-	a := newApp(t, func(sel Selection) (Options, error) {
+	a := newApp(t, func(sel Selection, _ *ghsrc.Tracer) (Options, error) {
 		<-release
 		return Options{}, errors.New("released")
 	})
@@ -312,7 +312,7 @@ func TestAppLoadingPageFallsBackOnSmallTerminals(t *testing.T) {
 }
 
 func TestAppLoadFailureStaysOnQueueWithError(t *testing.T) {
-	failing := func(Selection) (Options, error) { return Options{}, errors.New("HTTP 502") }
+	failing := func(Selection, *ghsrc.Tracer) (Options, error) { return Options{}, errors.New("HTTP 502") }
 	a := newApp(t, failing)
 
 	a, quit := pressA(t, a, "enter")
@@ -375,7 +375,7 @@ func TestAppCtrlCQuitsWhileSubmitting(t *testing.T) {
 }
 
 func TestAppLoadFailureDoesNotOfferRetryOfTheList(t *testing.T) {
-	failing := func(Selection) (Options, error) { return Options{}, errors.New("HTTP 502") }
+	failing := func(Selection, *ghsrc.Tracer) (Options, error) { return Options{}, errors.New("HTTP 502") }
 	a := newApp(t, failing)
 	a, _ = pressA(t, a, "enter")
 	if strings.Contains(stripANSI(a.View()), "r retry") {
@@ -421,8 +421,8 @@ func TestAppDoubleClickInTheQueueOpensThePullRequest(t *testing.T) {
 // which opens as one you reviewed before its latest commits.
 func followupApp(t *testing.T) App {
 	t.Helper()
-	open := func(sel Selection) (Options, error) {
-		opts, err := openerFor(t, nil)(sel)
+	open := func(sel Selection, _ *ghsrc.Tracer) (Options, error) {
+		opts, err := openerFor(t, nil)(sel, nil)
 		opts.Files = diffparse.Parse(noteDiff)
 		opts.Source.FollowUp = followupSession()
 		return opts, err
@@ -473,8 +473,8 @@ func TestAppDoubleClickOnNewCommitsOpensChangesSinceReview(t *testing.T) {
 
 func TestAppDropsAYankResultFromALeftReview(t *testing.T) {
 	clip := &fakeClipboard{err: errors.New("from the old review")}
-	open := func(sel Selection) (Options, error) {
-		o, err := openerFor(t, nil)(sel)
+	open := func(sel Selection, _ *ghsrc.Tracer) (Options, error) {
+		o, err := openerFor(t, nil)(sel, nil)
 		o.Clipboard = clip
 		return o, err
 	}
@@ -503,7 +503,7 @@ func TestRoman(t *testing.T) {
 
 func TestAppPreviewShowsLoadingPageWithoutLoading(t *testing.T) {
 	loads := 0
-	a := newApp(t, func(Selection) (Options, error) {
+	a := newApp(t, func(Selection, *ghsrc.Tracer) (Options, error) {
 		loads++
 		return Options{}, nil
 	})

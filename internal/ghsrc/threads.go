@@ -254,25 +254,28 @@ func (c Client) snapshot(repo string, number int, history bool) (Snapshot, error
 	target := c
 	target.Repo = repo
 	for attempt := 0; attempt < 2; attempt++ {
-		before, err := target.PR(number)
+		if attempt > 0 {
+			target.Trace.Mark("head moved — retrying")
+		}
+		before, err := target.traced("pull request").PR(number)
 		if err != nil {
 			return Snapshot{}, err
 		}
-		raw, err := target.Diff(number)
+		raw, err := target.traced("diff").Diff(number)
 		if err != nil {
 			return Snapshot{}, err
 		}
-		threads, err := target.Threads(repo, number)
+		threads, err := target.traced("threads").Threads(repo, number)
 		if err != nil {
 			return Snapshot{}, err
 		}
 		meta := Snapshot{}
 		if history {
-			meta.Viewer, err = target.Viewer()
+			meta.Viewer, err = target.traced("viewer").Viewer()
 			if err != nil {
 				meta.Warnings = append(meta.Warnings, "Review identity unavailable: "+err.Error())
 			} else {
-				reviews, historyErr := target.Reviews(repo, number)
+				reviews, historyErr := target.traced("reviews").Reviews(repo, number)
 				if historyErr != nil {
 					meta.Warnings = append(meta.Warnings, "Review history unavailable: "+historyErr.Error())
 				} else {
@@ -286,7 +289,7 @@ func (c Client) snapshot(repo string, number int, history bool) (Snapshot, error
 				}
 			}
 		}
-		after, err := target.PR(number)
+		after, err := target.traced("recheck head").PR(number)
 		if err != nil {
 			return Snapshot{}, err
 		}

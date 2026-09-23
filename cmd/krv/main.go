@@ -387,8 +387,8 @@ func runQueue(repo *gitsrc.Repo, cfg config.Config, limit int) error {
 		return err
 	}
 
-	open := func(sel tui.Selection) (tui.Options, error) {
-		return queuedReview(repo, cfg, sel.Repo, sel.Number)
+	open := func(sel tui.Selection, trace *ghsrc.Tracer) (tui.Options, error) {
+		return queuedReview(repo, cfg, sel.Repo, sel.Number, trace)
 	}
 	_, err = tea.NewProgram(tui.NewApp(tui.NewQueue(client, th, limit).WithThemes(cfg, nil), open), screenOptions(cfg)...).Run()
 	return err
@@ -425,8 +425,8 @@ func printQueue(client ghsrc.Client, limit int) error {
 // queuedReview loads a pull request chosen from the queue. It may live in
 // another repository than the working directory, so the client is pointed at
 // that repository by name rather than by path.
-func queuedReview(repo *gitsrc.Repo, cfg config.Config, name string, number int) (tui.Options, error) {
-	client := ghsrc.Client{Host: cfg.Host, Dir: repo.Root, Repo: name}
+func queuedReview(repo *gitsrc.Repo, cfg config.Config, name string, number int, trace *ghsrc.Tracer) (tui.Options, error) {
+	client := ghsrc.Client{Host: cfg.Host, Dir: repo.Root, Repo: name, Trace: trace}
 
 	src, files, err := loadPR(client, name, number)
 	if err != nil {
@@ -492,6 +492,8 @@ func loadPR(client ghsrc.Client, name string, number int) (tui.Source, []*diffpa
 	}
 	session := followup.FromSnapshot(snapshot)
 	pr := session.PR
+	// The trace belongs to the load; the review's own calls report nowhere.
+	client.Trace = nil
 	src := tui.Source{
 		Kind:  tui.SourcePR,
 		Title: fmt.Sprintf("%s#%d %s", name, pr.Number, pr.Title),

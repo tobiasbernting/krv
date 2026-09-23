@@ -36,6 +36,12 @@ type Client struct {
 	// runOverride is an internal seam for exercising multi-command operations
 	// without invoking gh. Production clients leave it nil.
 	runOverride func(stdin []byte, args ...string) (string, error)
+
+	// Trace, when set, hears about every command the client runs, labelled
+	// with the step it belongs to; the loading page shows them.
+	Trace *Tracer
+	// step and group label the commands run, set by traced.
+	step, group string
 }
 
 // Preflight checks that gh exists and is authenticated. It is called once per
@@ -256,7 +262,9 @@ func (c Client) submitReview(repo string, number int, headSHA, event, body strin
 
 func (c Client) run(args ...string) (string, error) { return c.runInput(nil, args...) }
 
-func (c Client) runInput(stdin []byte, args ...string) (string, error) {
+func (c Client) runInput(stdin []byte, args ...string) (_ string, err error) {
+	id := c.Trace.start(c.step, c.group, "gh", args)
+	defer func() { c.Trace.end(id, err) }()
 	if c.runOverride != nil {
 		return c.runOverride(stdin, args...)
 	}
