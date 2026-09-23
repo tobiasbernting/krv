@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.0](https://github.com/tobiasbernting/krv/compare/v2.5.0...v2.6.0) (2026-09-23)
+
+
+### Features
+
+* show what a pull request load is doing on the loading page ([#44](https://github.com/tobiasbernting/krv/issues/44)) ([b10e6b2](https://github.com/tobiasbernting/krv/commit/b10e6b274ef59aea710811f70e6cb4dd2306786c))
+
 ## [2.5.0](https://github.com/tobiasbernting/krv/compare/v2.4.0...v2.5.0) (2026-09-23)
 
 
