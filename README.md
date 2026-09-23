@@ -271,6 +271,11 @@ Drafts are stored outside the repository — under `~/.config/krv`, or
 is shared or reset. They are keyed by pull request number, or by branch for
 local work, so an agent rewriting files underneath you does not orphan them.
 
+The file versions fetched to show what changed since your last review are
+cached beside them, in `blobs/`, by their git object id. A later review round
+fetches only what is new, and reopening a pull request fetches nothing.
+Entries unread for 30 days are removed.
+
 Each draft records the blob hash of the file it was written against. When the
 file changes, the draft is shown as **needs re-anchor** and detached from its
 line rather than pointing at a line that has since moved. Press `m`, navigate

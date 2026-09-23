@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -253,6 +254,7 @@ func (c Client) ReviewSnapshot(repo string, number int) (Snapshot, error) {
 func (c Client) snapshot(repo string, number int, history bool) (Snapshot, error) {
 	target := c
 	target.Repo = repo
+	target.throttle = newThrottle()
 	for attempt := 0; attempt < 2; attempt++ {
 		if attempt > 0 {
 			target.Trace.Mark("head moved — retrying")
@@ -261,33 +263,39 @@ func (c Client) snapshot(repo string, number int, history bool) (Snapshot, error
 		if err != nil {
 			return Snapshot{}, err
 		}
-		raw, err := target.traced("diff").Diff(number)
-		if err != nil {
-			return Snapshot{}, err
-		}
-		threads, err := target.traced("threads").Threads(repo, number)
-		if err != nil {
-			return Snapshot{}, err
-		}
-		meta := Snapshot{}
+		// The diff, the threads and your review history do not depend on
+		// each other, only on the head just read, so they are fetched side by
+		// side. The head is read again after all three; a move in between
+		// retries the whole load, whatever order they finished in.
+		var (
+			wg                 sync.WaitGroup
+			raw                string
+			threads            ThreadFeed
+			diffErr, threadErr error
+			meta               Snapshot
+		)
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			raw, diffErr = target.traced("diff").Diff(number)
+		}()
+		go func() {
+			defer wg.Done()
+			threads, threadErr = target.traced("threads").Threads(repo, number)
+		}()
 		if history {
-			meta.Viewer, err = target.traced("viewer").Viewer()
-			if err != nil {
-				meta.Warnings = append(meta.Warnings, "Review identity unavailable: "+err.Error())
-			} else {
-				reviews, historyErr := target.traced("reviews").Reviews(repo, number)
-				if historyErr != nil {
-					meta.Warnings = append(meta.Warnings, "Review history unavailable: "+historyErr.Error())
-				} else {
-					meta.Baseline = LatestReview(reviews, meta.Viewer)
-				}
-			}
-			if meta.Baseline != nil {
-				meta.Comparison, err = target.CompareRevisions(repo, meta.Baseline.CommitID, before.HeadSHA)
-				if err != nil {
-					meta.ComparisonError = "Historical comparison unavailable: " + err.Error()
-				}
-			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				meta = target.history(repo, number, before.HeadSHA)
+			}()
+		}
+		wg.Wait()
+		if diffErr != nil {
+			return Snapshot{}, diffErr
+		}
+		if threadErr != nil {
+			return Snapshot{}, threadErr
 		}
 		after, err := target.traced("recheck head").PR(number)
 		if err != nil {
@@ -299,4 +307,29 @@ func (c Client) snapshot(repo string, number int, history bool) (Snapshot, error
 		}
 	}
 	return Snapshot{}, fmt.Errorf("pull request changed while syncing; press r to retry")
+}
+
+// history is who you are, your latest review of the pull request, and the
+// changes since it. Each part that fails is a warning, not a failed load.
+func (c Client) history(repo string, number int, head string) Snapshot {
+	var meta Snapshot
+	var err error
+	meta.Viewer, err = c.traced("viewer").Viewer()
+	if err != nil {
+		meta.Warnings = append(meta.Warnings, "Review identity unavailable: "+err.Error())
+		return meta
+	}
+	reviews, err := c.traced("reviews").Reviews(repo, number)
+	if err != nil {
+		meta.Warnings = append(meta.Warnings, "Review history unavailable: "+err.Error())
+		return meta
+	}
+	meta.Baseline = LatestReview(reviews, meta.Viewer)
+	if meta.Baseline != nil {
+		meta.Comparison, err = c.CompareRevisions(repo, meta.Baseline.CommitID, head)
+		if err != nil {
+			meta.ComparisonError = "Historical comparison unavailable: " + err.Error()
+		}
+	}
+	return meta
 }

@@ -64,10 +64,10 @@ func TestTracePanelShowsTheLatestFiveSteps(t *testing.T) {
 func TestTracePanelTimesRunningStepsAndKeepsLabels(t *testing.T) {
 	long := "gh api repos/acme/app/git/blobs/" + strings.Repeat("9f", 40)
 	a := tracedPage(t, 100, 30, 4200*time.Millisecond,
-		start(1, "compare files 7/23", "g1", long, 0),
+		start(1, "file versions 7/23", "g1", long, 0),
 		start(2, "build compare", "g2", "git hash-object -w --stdin", 0))
 	panel := panelLines(a)
-	for _, want := range []string{"compare files 7/23", "build compare", "4.2s", "…"} {
+	for _, want := range []string{"file versions 7/23", "build compare", "4.2s", "…"} {
 		if !strings.Contains(strings.Join(panel, "\n"), want) {
 			t.Errorf("panel lacks %q:\n%s", want, strings.Join(panel, "\n"))
 		}
@@ -84,10 +84,10 @@ func TestTracePanelTimesRunningStepsAndKeepsLabels(t *testing.T) {
 
 func TestTraceGroupSpinsUntilItsLastCommandEnds(t *testing.T) {
 	var l traceLog
-	l.add(start(1, "compare files 1/2", "g", "gh a", 0))
-	l.add(start(2, "compare files 2/2", "g", "gh b", 0))
+	l.add(start(1, "file versions 1/2", "g", "gh a", 0))
+	l.add(start(2, "file versions 2/2", "g", "gh b", 0))
 	l.add(end(1, time.Second, nil))
-	if len(l.entries) != 1 || l.entries[0].running != 1 || l.current() != "compare files 2/2" {
+	if len(l.entries) != 1 || l.entries[0].running != 1 || l.current() != "file versions 2/2" {
 		t.Fatalf("after one of two ends: %+v", l.entries)
 	}
 	l.add(end(2, 2*time.Second, fmt.Errorf("HTTP 502")))
@@ -148,7 +148,7 @@ func TestLoadingPreviewShowsASampleTrace(t *testing.T) {
 	next, _ := a.Update(openMsg{sel: Selection{Repo: "acme/x", Number: 8}, preview: true})
 	a = next.(App)
 	view := stripANSI(a.View())
-	for _, want := range []string{"pull request", "compare files 7/23", "gh pr diff"} {
+	for _, want := range []string{"pull request", "file versions 7/23", "gh pr diff"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("preview lacks %q:\n%s", want, view)
 		}
