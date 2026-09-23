@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.0](https://github.com/tobiasbernting/krv/compare/v2.4.0...v2.5.0) (2026-09-23)
+
+
+### Features
+
+* pick a theme with T, and keep code readable on every tint ([#42](https://github.com/tobiasbernting/krv/issues/42)) ([48db6da](https://github.com/tobiasbernting/krv/commit/48db6da136507b3e8f571422ba539970d21bdaa1))
+
 ## [2.4.0](https://github.com/tobiasbernting/krv/compare/v2.3.0...v2.4.0) (2026-09-19)
 
 
