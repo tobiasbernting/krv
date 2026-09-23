@@ -43,6 +43,10 @@ type loadingPage struct {
 	frame         int
 	theme         render.Theme
 	width, height int
+	// trace is what the load has run so far, and now the time its running
+	// entries are timed against, moved on by each frame.
+	trace traceLog
+	now   time.Time
 }
 
 func (p loadingPage) View() string {
@@ -52,18 +56,39 @@ func (p loadingPage) View() string {
 	if sc.themed {
 		bg = t.Bg
 	}
-	c := newCanvas(p.width, p.height)
-	if sc.draw(c, p) {
-		return strings.Join(c.rows(bg), "\n")
+	height := p.height
+	panel := p.height >= traceMinHeight
+	if panel {
+		height -= traceRows
 	}
+	c := newCanvas(p.width, height)
+	var rows []string
+	if sc.draw(c, p) {
+		rows = c.rows(bg)
+	} else {
+		bg = t.Bg
+		rows = p.oneLine(height)
+	}
+	if panel {
+		tc := newCanvas(p.width, traceRows)
+		drawTrace(tc, p)
+		rows = append(rows, tc.rows(bg)...)
+	}
+	return strings.Join(rows, "\n")
+}
 
-	// A scene that does not fit is not drawn at all: clipped or wrapped, it
-	// is noise. One line still says what is happening.
+// oneLine is the page for a screen too small for the scene: clipped or
+// wrapped, a scene is noise. One line still says what is happening.
+func (p loadingPage) oneLine(height int) []string {
+	t := p.theme
 	surface := lipgloss.NewStyle().Background(lipgloss.Color(t.Bg)).Foreground(lipgloss.Color(t.Fg))
 	name := fmt.Sprintf("%s#%d", p.item.Repo, p.item.Number)
 	// The title gives way first: which pull request, and how to get out,
 	// are the parts that must survive.
 	head, tail := "loading "+name+" ", " — "+loadingHint
+	if step := p.trace.current(); step != "" {
+		tail = " · " + step + tail
+	}
 	room := p.width - 4 - runewidth.StringWidth(head) - runewidth.StringWidth(tail)
 	text := head + tail
 	if room > 3 {
@@ -73,19 +98,16 @@ func (p loadingPage) View() string {
 		Render(spinner[p.frame%len(spinner)])
 	line := spin + surface.Render(" ") + surface.Render(runewidth.Truncate(text, maxInt(1, p.width-4), "…"))
 
-	top := maxInt(0, (p.height-1)/2)
-	var b strings.Builder
-	for i := 0; i < p.height; i++ {
-		if i > 0 {
-			b.WriteString("\n")
-		}
+	top := maxInt(0, (height-1)/2)
+	rows := make([]string, height)
+	for i := range rows {
 		if i == top {
-			b.WriteString(centered(surface, line, p.width))
+			rows[i] = centered(surface, line, p.width)
 			continue
 		}
-		b.WriteString(surface.Render(strings.Repeat(" ", p.width)))
+		rows[i] = surface.Render(strings.Repeat(" ", p.width))
 	}
-	return b.String()
+	return rows
 }
 
 // centered pads a styled line to the middle of a surface-coloured row.

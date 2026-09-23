@@ -48,13 +48,14 @@ func (c Client) CompareRevisions(repo, baseSHA, headSHA string) (*RevisionCompar
 	if !revisionObjectID(baseSHA) || !revisionObjectID(headSHA) {
 		return nil, fmt.Errorf("revision comparison requires full immutable commit IDs")
 	}
-	base, err := c.revisionTree(repo, baseSHA)
+	trees := c.traced("compare trees")
+	base, err := trees.revisionTree(repo, baseSHA)
 	if err != nil {
 		return nil, fmt.Errorf("review baseline %s unavailable: %w", baseSHA, err)
 	}
 	head := base
 	if baseSHA != headSHA {
-		head, err = c.revisionTree(repo, headSHA)
+		head, err = trees.revisionTree(repo, headSHA)
 		if err != nil {
 			return nil, fmt.Errorf("review head %s unavailable: %w", headSHA, err)
 		}
@@ -82,28 +83,34 @@ func (c Client) CompareRevisions(repo, baseSHA, headSHA string) (*RevisionCompar
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
-	git := revisionGit{dir: dir}
+	git := revisionGit{dir: dir, trace: c.Trace, group: c.Trace.group()}
 	if _, err := git.run(nil, "init", "--bare", "--quiet", "--template=", "."); err != nil {
 		return nil, err
 	}
-	loaded := map[string]bool{}
+	var blobs []revisionEntry
+	listed := map[string]bool{}
 	for _, entries := range []map[string]revisionEntry{oldChanged, newChanged} {
 		for _, entry := range entries {
-			if entry.Type != "blob" || loaded[entry.SHA] {
+			if entry.Type != "blob" || listed[entry.SHA] {
 				continue
 			}
-			data, err := c.revisionBlob(repo, entry.SHA)
-			if err != nil {
-				return nil, fmt.Errorf("cannot compare %q: %w", entry.Path, err)
-			}
-			id, err := git.run(data, "hash-object", "-w", "--stdin")
-			if err != nil {
-				return nil, err
-			}
-			if strings.TrimSpace(id) != entry.SHA {
-				return nil, fmt.Errorf("cannot compare %q: downloaded blob does not match %s", entry.Path, entry.SHA)
-			}
-			loaded[entry.SHA] = true
+			blobs = append(blobs, entry)
+			listed[entry.SHA] = true
+		}
+	}
+	files := c.traced("compare files")
+	for k, entry := range blobs {
+		label := fmt.Sprintf("compare files %d/%d", k+1, len(blobs))
+		data, err := files.relabel(label).revisionBlob(repo, entry.SHA)
+		if err != nil {
+			return nil, fmt.Errorf("cannot compare %q: %w", entry.Path, err)
+		}
+		id, err := git.run(data, "hash-object", "-w", "--stdin")
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(id) != entry.SHA {
+			return nil, fmt.Errorf("cannot compare %q: downloaded blob does not match %s", entry.Path, entry.SHA)
 		}
 	}
 	oldTree, err := git.tree(oldChanged)
@@ -214,9 +221,15 @@ func (c Client) revisionBlob(repo, sha string) ([]byte, error) {
 
 // revisionGit ignores caller Git overrides and user config. Every object write
 // stays in its temporary bare repository; filenames are only mktree stdin data.
-type revisionGit struct{ dir string }
+type revisionGit struct {
+	dir   string
+	trace *Tracer
+	group string // every git command is one "build compare" line
+}
 
-func (g revisionGit) run(input []byte, args ...string) (string, error) {
+func (g revisionGit) run(input []byte, args ...string) (_ string, err error) {
+	id := g.trace.start("build compare", g.group, "git", args)
+	defer func() { g.trace.end(id, err) }()
 	cmd := exec.Command("git", args...)
 	cmd.Dir = g.dir
 	for _, value := range os.Environ() {

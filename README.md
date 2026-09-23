@@ -58,7 +58,9 @@ pull requests show the decision and size, without the marker. On a narrow
 terminal the size goes first, then the decision's word.
 
 A pull request opened from the queue opens in the same window: `esc` cancels
-while it loads (`tab` meanwhile cycles the loading animations), `q` in the
+while it loads (`tab` meanwhile cycles the loading animations, and the bottom
+left lists each step, the `gh` or `git` command behind it and how long it
+took, so a slow load shows where the time goes), `q` in the
 review goes back to the list (refreshed, cursor where you left it), and
 `ctrl+c` quits from anywhere. A review opened directly with `krv <n>` still
 quits on `q`.

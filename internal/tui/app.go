@@ -3,8 +3,10 @@ package tui
 import (
 	"fmt"
 	"math/rand/v2"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/tobiasbernting/krv/v2/internal/ghsrc"
 )
 
 type screen int
@@ -21,7 +23,7 @@ const (
 type App struct {
 	queue  QueueModel
 	review Model
-	open   func(Selection) (Options, error)
+	open   func(Selection, *ghsrc.Tracer) (Options, error)
 
 	screen screen
 	// loading is the page shown while screen is screenLoading, naming the
@@ -39,8 +41,9 @@ type App struct {
 }
 
 // NewApp starts on the queue. open loads what a row names; it runs off the
-// UI goroutine, so it may block on the network.
-func NewApp(queue QueueModel, open func(Selection) (Options, error)) App {
+// UI goroutine, so it may block on the network. It reports the commands it
+// runs to the tracer, which the loading page shows.
+func NewApp(queue QueueModel, open func(Selection, *ghsrc.Tracer) (Options, error)) App {
 	return App{queue: queue, open: open, width: queue.width, height: queue.height}
 }
 
@@ -95,22 +98,35 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			scene: rand.IntN(len(scenes)),
 			theme: a.queue.theme,
 			width: a.width, height: a.height,
+			now: time.Now(),
 		}
 		if msg.preview {
+			a.loading.trace = sampleTrace(a.loading.now)
 			return a, nextFrame(a.gen)
 		}
 		gen, open, sel := a.gen, a.open, msg.sel
+		feed := newTraceFeed()
 		load := func() tea.Msg {
-			opts, err := open(sel)
+			defer feed.close()
+			opts, err := open(sel, ghsrc.NewTracer(feed.send))
 			return openedMsg{gen: gen, opts: opts, err: err}
 		}
-		return a, tea.Batch(load, nextFrame(gen))
+		return a, tea.Batch(load, nextFrame(gen), readTrace(gen, feed.ch))
+
+	case traceMsg:
+		if !a.current(msg.gen, screenLoading) {
+			return a, nil
+		}
+		a.loading.trace.add(msg.ev)
+		a.loading.now = time.Now()
+		return a, readTrace(msg.gen, msg.ch)
 
 	case frameMsg:
 		if !a.current(msg.gen, screenLoading) {
 			return a, nil
 		}
 		a.loading.frame++
+		a.loading.now = time.Now()
 		return a, nextFrame(a.gen)
 
 	case openedMsg:
