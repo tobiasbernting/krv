@@ -84,6 +84,7 @@ hides them.
 | `h` / `l` | scroll horizontally, `0` to reset |
 | `f` | file list |
 | `s` | toggle split / unified layout for this session |
+| `T` | pick a colour theme: `j`/`k` previews on the diff, `enter` saves it |
 | `r` | sync the current pull request |
 | `N` / `P` | next / previous thread with new activity |
 | `enter` | expand a thread or open a comment |
@@ -139,7 +140,7 @@ well, for terminals that ignore OSC 52.
 
 | flag | effect |
 | --- | --- |
-| `--theme <name>` | colour theme: `dark`, `light`, `high-contrast` (default `dark`) |
+| `--theme <name>` | colour theme, such as `dark`, `light` or `nord` (default `dark`); `T` in krv lists them all |
 | `--syntax <name>` | chroma style for code, overriding the theme's own |
 | `--density <name>` | `comfortable` or `compact` row density |
 | `--layout <name>` | `unified` or `split` diff layout (default `unified`) |
@@ -176,17 +177,35 @@ scroll to see it. Drafts and review comments wrap to the terminal instead,
 hanging under their author's name: one line where they sit, expanded while the
 cursor is on them, so a conversation never buries the code it is about.
 
-Themes are chosen, not detected: `dark`, `light` and `high-contrast` each set a
-background, so krv never has to guess what your terminal is and never guesses
-wrong. Syntax colour is muted toward the surface — least of all on function,
-method and type names — so diff state wins the page while code keeps its shape.
-`--syntax` overrides the chroma style a theme comes with, and a `theme` naming
-a chroma style still means what it used to.
+Themes are chosen, not detected: each one sets a background, so krv never has
+to guess what your terminal is and never guesses wrong.
 
-Set the one you want once, in `~/.config/krv/config.toml`:
+| group | themes |
+| --- | --- |
+| dark | `dark`, `dracula`, `gruvbox-dark`, `high-contrast`, `nord`, `tokyonight` |
+| light | `light`, `solarized-light` |
+| colour-blind | `dark-cb`, `light-cb`: blue and orange instead of green and red, intra-line changes underlined |
+
+Press `T` in a review, the file list or the queue to pick one. Moving through
+the list restyles the screen behind it, so the diff you are reading is the
+preview; `enter` keeps the theme and saves it to `~/.config/krv/config.toml`,
+`esc` puts back the one you had. If `--theme`, `KRV_THEME` or a repository's
+`.krv.toml` sets the theme, that still wins on the next run, and krv says so
+when it saves.
+
+Syntax colour is muted toward the background it sits on — least of all on
+function, method and type names — so diff state wins the page while code keeps
+its shape. Muting stops short of making code hard to read: every token keeps a
+minimum contrast against its row, and more on an intra-line change.
+`--syntax` overrides the chroma style a theme comes with. A `theme` naming a
+chroma style still works: `dracula`, `nord` and `solarized-light` now get the
+whole krv theme of that name, and any other style name gets `dark` with that
+style's code colours.
+
+Or set the one you want by hand, in `~/.config/krv/config.toml`:
 
 ```toml
-theme = "light"       # dark, light or high-contrast
+theme = "light"
 ```
 
 That is the whole file — every other setting keeps its default. Three lines go
@@ -217,11 +236,25 @@ krv --theme light .               # or just this run
 ```
 
 <details>
-<summary>The same diff in <code>light</code> and <code>high-contrast</code></summary>
+<summary>The same diff in every other theme</summary>
 
 <img src="docs/img/theme-light.svg" alt="the same diff in the light theme" width="100%">
 
 <img src="docs/img/theme-high-contrast.svg" alt="the same diff in the high-contrast theme, on a black background with intra-line changes underlined" width="100%">
+
+<img src="docs/img/theme-dark-cb.svg" alt="the same diff in the dark-cb theme: additions tinted blue, deletions orange, intra-line changes underlined" width="100%">
+
+<img src="docs/img/theme-light-cb.svg" alt="the same diff in the light-cb theme: additions tinted blue, deletions orange, on a light background" width="100%">
+
+<img src="docs/img/theme-dracula.svg" alt="the same diff in the dracula theme" width="100%">
+
+<img src="docs/img/theme-gruvbox-dark.svg" alt="the same diff in the gruvbox-dark theme" width="100%">
+
+<img src="docs/img/theme-nord.svg" alt="the same diff in the nord theme" width="100%">
+
+<img src="docs/img/theme-tokyonight.svg" alt="the same diff in the tokyonight theme" width="100%">
+
+<img src="docs/img/theme-solarized-light.svg" alt="the same diff in the solarized-light theme" width="100%">
 
 </details>
 
@@ -315,7 +348,7 @@ instead.
 ```toml
 # .krv.toml — checked in, or not, as you prefer
 host = "github.example.com"   # default: whatever gh is configured with
-theme = "dark"                # dark, light or high-contrast
+theme = "dark"                # or light, nord, dark-cb, … (T lists them)
 syntax = "catppuccin-mocha"   # any chroma style name
 density = "comfortable"       # comfortable or compact
 layout = "unified"            # unified or split; split needs 140 columns

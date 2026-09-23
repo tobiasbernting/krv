@@ -104,7 +104,7 @@ usage:
 
 flags:
   --host <name>      GitHub hostname (default: whatever gh is configured with)
-  --theme <name>     colour theme: dark, light, high-contrast
+  --theme <name>     colour theme, e.g. dark, light, nord (T in krv lists them)
   --syntax <name>    chroma style for code, overriding the theme's own
   --density <name>   row density: comfortable or compact
   --layout <name>    diff layout: unified or split
@@ -136,7 +136,7 @@ configuration:
   Both files are TOML and every key is optional:
 
     host = "github.example.com"   # default: whatever gh is configured with
-    theme = "dark"                # dark, light or high-contrast
+    theme = "dark"                # T in krv picks one and saves it here
     syntax = "catppuccin-mocha"   # any chroma style name
     density = "comfortable"       # comfortable or compact
     layout = "unified"            # unified or split (split needs 140 columns)
@@ -185,7 +185,7 @@ type options struct {
 func registerFlags(fs *flag.FlagSet) *options {
 	var o options
 	fs.StringVar(&o.host, "host", "", "GitHub hostname")
-	fs.StringVar(&o.theme, "theme", "", "colour theme: dark, light, high-contrast")
+	fs.StringVar(&o.theme, "theme", "", "colour theme, e.g. dark, light, nord")
 	fs.StringVar(&o.syntax, "syntax", "", "chroma style for code")
 	fs.StringVar(&o.density, "density", "", "row density: comfortable or compact")
 	fs.StringVar(&o.layout, "layout", "", "diff layout: unified or split")
@@ -208,7 +208,7 @@ func applyFlags(fs *flag.FlagSet, o *options, cfg *config.Config) {
 		case "host":
 			cfg.Host = o.host
 		case "theme":
-			cfg.Theme = o.theme
+			cfg.Theme, cfg.ThemeFrom = o.theme, "--theme"
 		case "syntax":
 			cfg.Syntax = o.syntax
 		case "density":
@@ -390,7 +390,7 @@ func runQueue(repo *gitsrc.Repo, cfg config.Config, limit int) error {
 	open := func(sel tui.Selection) (tui.Options, error) {
 		return queuedReview(repo, cfg, sel.Repo, sel.Number)
 	}
-	_, err = tea.NewProgram(tui.NewApp(tui.NewQueue(client, th, limit), open), screenOptions(cfg)...).Run()
+	_, err = tea.NewProgram(tui.NewApp(tui.NewQueue(client, th, limit).WithThemes(cfg, nil), open), screenOptions(cfg)...).Run()
 	return err
 }
 

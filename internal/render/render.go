@@ -467,7 +467,12 @@ type Renderer struct {
 
 	mu     sync.Mutex
 	styles map[styleKey]lipgloss.Style
-	muted  map[[2]string]string
+	muted  map[mutedKey]string
+}
+
+type mutedKey struct {
+	fg, bg     string
+	emph, mark bool
 }
 
 type styleKey struct {
@@ -481,7 +486,7 @@ func NewRenderer(theme Theme, doc *Document) *Renderer {
 		Theme:  theme,
 		Doc:    doc,
 		styles: map[styleKey]lipgloss.Style{},
-		muted:  map[[2]string]string{},
+		muted:  map[mutedKey]string{},
 	}
 }
 
@@ -516,10 +521,13 @@ func (r *Renderer) styleKey(key styleKey) lipgloss.Style {
 	return s
 }
 
-// syntaxFg mutes one syntax colour toward the surface. Names keep most of
-// their colour; everything else recedes, which is what stops a rainbow of
-// tokens from competing with the add/delete tint for attention.
-func (r *Renderer) syntaxFg(fg string, emph bool) string {
+// syntaxFg mutes one syntax colour toward the background it is painted on.
+// Names keep most of their colour; everything else recedes, which is what
+// stops a rainbow of tokens from competing with the add/delete tint for
+// attention. Receding stops at minCodeContrast, or minMarkContrast on an
+// intra-line change: a token muted into the tone of its background is lifted
+// back out toward the text colour.
+func (r *Renderer) syntaxFg(fg, bg string, emph, mark bool) string {
 	t := r.Theme
 	if fg == "" {
 		return t.Fg
@@ -528,10 +536,7 @@ func (r *Renderer) syntaxFg(fg string, emph bool) string {
 	if emph {
 		amount = t.SyntaxMuteEmph
 	}
-	if amount <= 0 {
-		return fg
-	}
-	key := [2]string{fg, fmt.Sprint(emph)}
+	key := mutedKey{fg, bg, emph, mark}
 	r.mu.Lock()
 	if m, ok := r.muted[key]; ok {
 		r.mu.Unlock()
@@ -539,7 +544,11 @@ func (r *Renderer) syntaxFg(fg string, emph bool) string {
 	}
 	r.mu.Unlock()
 
-	m := mix(fg, t.Bg, amount)
+	floor := minCodeContrast
+	if mark {
+		floor = minMarkContrast
+	}
+	m := readable(mix(fg, bg, amount), bg, t.Fg, floor)
 	r.mu.Lock()
 	r.muted[key] = m
 	r.mu.Unlock()
@@ -681,13 +690,14 @@ func (r *Renderer) code(segs []Segment, marks []span, width, hoffset int, tn row
 		run.Reset()
 	}
 	keyFor := func(c cell) styleKey {
-		key := styleKey{fg: r.syntaxFg(c.fg, c.emph), bg: tn.bg}
-		if tn.codeFg != "" {
-			key.fg = tn.codeFg
-		}
+		key := styleKey{bg: tn.bg}
 		if c.mark && tn.wordBg != "" {
 			key.bg = tn.wordBg
 			key.underline = r.Theme.MarkUnderline
+		}
+		key.fg = r.syntaxFg(c.fg, key.bg, c.emph, c.mark && tn.wordBg != "")
+		if tn.codeFg != "" {
+			key.fg = tn.codeFg
 		}
 		return key
 	}

@@ -29,7 +29,7 @@ type Config struct {
 	// Empty means "whatever gh is configured to use".
 	Host string `toml:"host"`
 
-	// Theme names a krv colour theme: dark, light or high-contrast. A chroma
+	// Theme names a krv colour theme, such as dark, light or nord. A chroma
 	// style name is also accepted, for configurations written before krv had
 	// themes of its own.
 	Theme string `toml:"theme"`
@@ -65,6 +65,11 @@ type Config struct {
 	// Mouse lets krv take clicks, drags and the wheel. The terminal's own
 	// text selection then needs a modifier held (Shift, or Option in iTerm2).
 	Mouse bool `toml:"mouse"`
+
+	// ThemeFrom is where Theme was set: a file's path, "KRV_THEME", the
+	// caller's flag name, or empty for the default. The theme picker saves to
+	// the user file and needs to say when something nearer overrides it.
+	ThemeFrom string `toml:"-"`
 
 	// sources records where the settings came from, for `krv --config`.
 	sources []string
@@ -143,7 +148,7 @@ func mergeFile(cfg *Config, path string) error {
 		case "host":
 			cfg.Host = file.Host
 		case "theme":
-			cfg.Theme = file.Theme
+			cfg.Theme, cfg.ThemeFrom = file.Theme, path
 		case "syntax":
 			cfg.Syntax = file.Syntax
 		case "density":
@@ -182,7 +187,7 @@ func mergeEnv(cfg *Config) error {
 		cfg.Host = v
 	}
 	if v, ok := os.LookupEnv("KRV_THEME"); ok {
-		cfg.Theme = v
+		cfg.Theme, cfg.ThemeFrom = v, "KRV_THEME"
 	}
 	if v, ok := os.LookupEnv("KRV_SYNTAX"); ok {
 		cfg.Syntax = v

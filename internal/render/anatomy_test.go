@@ -134,22 +134,22 @@ func TestSyntaxMutingKeepsNamesVivid(t *testing.T) {
 	th := r.Theme
 	const green = "#00ff00"
 
-	plain := r.syntaxFg(green, false)
-	name := r.syntaxFg(green, true)
+	plain := r.syntaxFg(green, th.Bg, false, false)
+	name := r.syntaxFg(green, th.Bg, true, false)
 	if plain == green {
 		t.Error("ordinary syntax was not muted at all")
 	}
 	if contrast(name, th.Bg) <= contrast(plain, th.Bg) {
 		t.Error("a name token is no more visible than ordinary syntax")
 	}
-	if got := r.syntaxFg("", false); got != th.Fg {
+	if got := r.syntaxFg("", th.Bg, false, false); got != th.Fg {
 		t.Errorf("uncoloured code = %q, want the theme's own foreground %q", got, th.Fg)
 	}
 
 	// A theme that asks for no muting gets none.
 	r.Theme.SyntaxMute, r.Theme.SyntaxMuteEmph = 0, 0
-	r.muted = map[[2]string]string{}
-	if got := r.syntaxFg(green, false); got != green {
+	r.muted = map[mutedKey]string{}
+	if got := r.syntaxFg(green, th.Bg, false, false); got != green {
 		t.Errorf("SyntaxMute 0 still changed %q to %q", green, got)
 	}
 }

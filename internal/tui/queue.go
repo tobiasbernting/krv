@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
+	"github.com/tobiasbernting/krv/v2/internal/config"
 	"github.com/tobiasbernting/krv/v2/internal/ghsrc"
 	"github.com/tobiasbernting/krv/v2/internal/notes"
 	"github.com/tobiasbernting/krv/v2/internal/render"
@@ -39,6 +40,13 @@ type QueueModel struct {
 	// notice is a failure that is not the list's, such as a pull request
 	// that would not open. It lasts until the next key.
 	notice string
+	// info is news that is not a failure, such as where a theme was saved.
+	// It lasts until the next key, as notice does.
+	info string
+
+	// themes and picker are T's theme picker.
+	themes themeSettings
+	picker themePicker
 
 	cursor        int
 	width, height int
@@ -56,7 +64,15 @@ func NewQueue(client ghsrc.Client, theme render.Theme, limit int) QueueModel {
 		width:  80, height: 24,
 		requests: inflight{},
 		now:      time.Now,
+		themes:   newThemeSettings(config.Defaults(), nil),
 	}
+}
+
+// WithThemes lets T pick a theme under the configuration in effect, saving
+// with save, or config.SaveTheme when it is nil.
+func (m QueueModel) WithThemes(cfg config.Config, save ThemeSaver) QueueModel {
+	m.themes = newThemeSettings(cfg, save)
+	return m
 }
 
 type queueLoadedMsg struct {
@@ -130,7 +146,7 @@ func (m QueueModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // footer, and less the line a notice or error takes over a list.
 func (m QueueModel) listBody() int {
 	body := m.height - 2
-	if m.notice != "" || m.err != "" {
+	if m.notice != "" || m.info != "" || m.err != "" {
 		body--
 	}
 	return body
@@ -162,7 +178,10 @@ func (m QueueModel) handleMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m QueueModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	m.notice = ""
+	m.notice, m.info = "", ""
+	if m.picker.open {
+		return m.handlePickerKey(msg.String())
+	}
 	switch msg.String() {
 	case "q", "ctrl+c", "esc":
 		return m, tea.Quit
@@ -180,6 +199,12 @@ func (m QueueModel) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = maxInt(0, len(m.items)-1)
 	case "r":
 		return m, m.load(true)
+	case "T":
+		if !m.themes.color {
+			m.info = "colour is off"
+			break
+		}
+		m.picker.start(m.theme)
 	case "t", "tab":
 		if m.filter == ghsrc.FilterReviewRequested {
 			m.filter = ghsrc.FilterAuthored
@@ -237,6 +262,13 @@ func (m *QueueModel) countDrafts() {
 }
 
 func (m QueueModel) View() string {
+	if m.picker.open {
+		return m.picker.overlay(m.view(), m.theme, m.width, m.height)
+	}
+	return m.view()
+}
+
+func (m QueueModel) view() string {
 	t := m.theme
 	var b strings.Builder
 
@@ -285,10 +317,24 @@ func (m QueueModel) View() string {
 		}
 		if notice != "" {
 			b.WriteString(m.message(t.DelSign, notice) + "\n")
+		} else if m.info != "" {
+			b.WriteString(m.message(t.Dim, m.info) + "\n")
+		}
+	}
+	// With no list, a notice or news of a save goes under the message that
+	// stands in for it.
+	if len(m.items) == 0 {
+		if m.notice != "" {
+			b.WriteString(m.message(t.DelSign, m.notice) + "\n")
+		} else if m.info != "" {
+			b.WriteString(m.message(t.Dim, m.info) + "\n")
 		}
 	}
 
-	hint := "enter open  O browser  t switch  r refresh  L loading  q quit"
+	hint := "enter open  O browser  t switch  r refresh  T theme  L loading  q quit"
+	if m.picker.open {
+		hint = pickerHint
+	}
 	if m.err != "" && len(m.items) > 0 {
 		hint = "r retry  " + hint
 	}

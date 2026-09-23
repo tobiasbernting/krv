@@ -19,9 +19,12 @@
 # on an enterprise host without changing anything globally.
 # host = "github.example.com"
 
-# Colour theme: dark, light or high-contrast. Pick the one that matches your
-# terminal — krv does not guess, because guessing wrong is worse than being
-# told once.
+# Colour theme. Pick the one that matches your terminal — krv does not guess,
+# because guessing wrong is worse than being told once. Press T in krv to try
+# them all on the diff in front of you; enter saves the choice here.
+#   dark:         dark, dracula, gruvbox-dark, high-contrast, nord, tokyonight
+#   light:        light, solarized-light
+#   colour-blind: dark-cb, light-cb (blue and orange instead of green and red)
 # theme = "dark"
 
 # Syntax highlighting style: any chroma style name, overriding the one the
