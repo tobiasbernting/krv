@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/tobiasbernting/krv/v2/internal/render"
 )
 
 // The shipped template must change nothing. A starter file that sets real
@@ -95,5 +97,14 @@ func TestInitWritesAndRefusesToOverwrite(t *testing.T) {
 	again, _ := os.ReadFile(path)
 	if string(again) != "theme = \"dracula\"\n" {
 		t.Error("Init overwrote an existing configuration")
+	}
+}
+
+// The template lists the themes by name, so it has to keep up with the presets.
+func TestTemplateNamesEveryTheme(t *testing.T) {
+	for _, name := range render.ThemeNames() {
+		if !strings.Contains(Template(), " "+name) {
+			t.Errorf("the template does not mention the %s theme", name)
+		}
 	}
 }

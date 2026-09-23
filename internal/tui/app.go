@@ -124,6 +124,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 		}
 		msg.opts.FromQueue = true
+		// A theme picked in the queue, or in an earlier review, carries on.
+		msg.opts.Theme = a.queue.theme
+		if msg.opts.SaveTheme == nil {
+			msg.opts.SaveTheme = a.queue.themes.save
+		}
 		a.review = New(msg.opts)
 		a.screen = screenReview
 		next, sized := a.review.Update(tea.WindowSizeMsg{Width: a.width, Height: a.height})
@@ -185,6 +190,7 @@ func (a App) updateReview(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a App) backToQueue() (tea.Model, tea.Cmd) {
 	a.gen++
 	a.screen = screenQueue
+	a.queue.theme = a.review.theme
 	a.review = Model{}
 	return a, a.queue.load(true)
 }

@@ -192,31 +192,52 @@ look right on the one background it was written against.
 
 Themes are **chosen, not detected**. Each preset states its own background, so
 krv never has to guess what your terminal is — and never guesses wrong. The
-built-ins are `dark`, `light` and `high-contrast`; `render.ThemeByName` reports
-whether a name is one of them, which is how the config layer tells a theme name
-from a chroma style name.
+built-ins are listed by `render.ThemeGroups`, in the order the `T` picker shows
+them: dark surfaces, light surfaces, then the colour-blind presets that mark
+changes in blue and orange instead of green and red. `render.ThemeByName`
+reports whether a name is one of them, which is how the config layer tells a
+theme name from a chroma style name. A preset named after a chroma style
+(`dracula`, `nord`, `solarized-light`) highlights with that style, so a
+configuration that named the style gets the whole theme.
+
+The picker (`internal/tui/themes.go`) restyles the live screen as the cursor
+moves — the diff behind it is the preview — and saves with
+`config.SaveTheme`, which edits the user file as text so its comments survive.
 
 ### Syntax muting
 
-Chroma colours the code; the renderer then blends each colour toward `Bg` by
-`SyntaxMute`, and by the gentler `SyntaxMuteEmph` for tokens that *name*
-something — functions, methods, classes, types, tags. Those are what the eye
-scans for in an unfamiliar diff, so they keep most of their colour while the
-punctuation, keywords and literals recede far enough that the add/delete tint
-wins. `Segment.Emph` is set in `highlight.go` from the chroma token type;
+Chroma colours the code; the renderer then blends each colour toward the
+background of the cell it is painted on — the surface, a row tint or an
+intra-line highlight — by `SyntaxMute`, and by the gentler `SyntaxMuteEmph`
+for tokens that *name* something — functions, methods, classes, types, tags.
+Those are what the eye scans for in an unfamiliar diff, so they keep most of
+their colour while the punctuation, keywords and literals recede far enough
+that the add/delete tint wins. `Segment.Emph` is set in `highlight.go` from the chroma token type;
 `Renderer.syntaxFg` does the blending and caches the result.
 
+Muting has a floor. A token that ends up closer in luminance to its cell than
+`minCodeContrast` is lifted toward `Fg` until it clears it, and an intra-line
+change is held to the stricter `minMarkContrast`, since it is the text the
+reviewer is being pointed at. Muting toward `Bg` alone used to leave a grey
+comment on a mid-green highlight all but invisible;
+`TestSyntaxStaysReadableOnEveryBackground` now checks every colour of every
+preset's chroma style against every background that preset paints.
+
 `SyntaxMute: 0` disables muting entirely, which is what a theme that wants raw
-chroma colours should set.
+chroma colours should set. The floor above still applies: a raw colour too
+close to its background is lifted all the same.
 
 ### Adding a theme
 
 1. Add a `func myTheme() Theme` in `theme.go`, ending in `.resolve()`.
-2. Register it in the `presets` map.
+2. Register it in the `presets` map, under its group.
 3. Run `go test ./internal/render` — `TestPresetsFillEveryRole` fails on any
    empty field, `TestPresetsKeepCompatibilityAliases` on a missed `resolve()`,
    and the contrast tests on text that will not read against its own tint.
-4. Regenerate the screenshots (below) if it is meant to ship.
+4. Add its name to the theme list in `internal/config/template.go`
+   (`TestTemplateNamesEveryTheme`), then run
+   `go test ./internal/config -update-example`.
+5. Regenerate the screenshots (below) if it is meant to ship.
 
 A user does not have to edit Go to change colours: `--syntax` overrides the
 chroma style a theme comes with, and `theme = "monokai"` — a chroma style name
@@ -282,7 +303,8 @@ goldens stay readable diffs of *layout* rather than walls of escape codes:
 Colour is tested where colour lives: `theme_test.go` checks role completeness,
 the aliases, that light and dark disagree about which end of the scale text
 sits on, that text keeps contrast against every tint a theme paints behind it,
-and that high-contrast out-contrasts dark and underlines intra-line changes
+that the colour-blind presets stay off red and green, and that high-contrast
+out-contrasts dark and underlines intra-line changes
 rather than relying on shading.
 
 ## Screenshots

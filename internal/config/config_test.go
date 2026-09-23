@@ -252,3 +252,38 @@ func TestMouseIsOnByDefaultAndCanBeTurnedOff(t *testing.T) {
 		t.Error("KRV_MOUSE=true should win over the file's false")
 	}
 }
+
+// A saved theme lands in the user file, so the theme picker has to know when
+// something nearer wins and the save will not show on the next run.
+func TestThemeFromNamesTheWinningSource(t *testing.T) {
+	krv := useConfigDir(t)
+	repo := t.TempDir()
+	if cfg, _ := Load(repo); cfg.ThemeFrom != "" {
+		t.Errorf("nothing set: ThemeFrom = %q, want empty", cfg.ThemeFrom)
+	}
+
+	user := write(t, krv, UserFile, "theme = \"nord\"\n")
+	if cfg, _ := Load(repo); cfg.ThemeFrom != user {
+		t.Errorf("user file: ThemeFrom = %q, want %q", cfg.ThemeFrom, user)
+	}
+
+	repoFile := write(t, repo, RepoFile, "theme = \"light\"\n")
+	if cfg, _ := Load(repo); cfg.ThemeFrom != repoFile {
+		t.Errorf("repo file: ThemeFrom = %q, want %q", cfg.ThemeFrom, repoFile)
+	}
+
+	t.Setenv("KRV_THEME", "dark")
+	if cfg, _ := Load(repo); cfg.ThemeFrom != "KRV_THEME" {
+		t.Errorf("environment: ThemeFrom = %q, want KRV_THEME", cfg.ThemeFrom)
+	}
+}
+
+// A file that sets other things leaves the theme's source alone.
+func TestThemeFromIgnoresFilesWithoutATheme(t *testing.T) {
+	user := write(t, useConfigDir(t), UserFile, "theme = \"nord\"\n")
+	repo := t.TempDir()
+	write(t, repo, RepoFile, "host = \"github.acme.internal\"\n")
+	if cfg, _ := Load(repo); cfg.ThemeFrom != user {
+		t.Errorf("ThemeFrom = %q, want %q", cfg.ThemeFrom, user)
+	}
+}

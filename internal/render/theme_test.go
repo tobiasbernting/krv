@@ -107,13 +107,75 @@ func TestLightAndDarkAreOpposites(t *testing.T) {
 	if luminance(dark.Bg) >= luminance(dark.Fg) {
 		t.Error("dark theme: background is not darker than its text")
 	}
-	for _, th := range []Theme{light, dark} {
+}
+
+// Every preset's plain text has to read on its surface and on every tint it
+// paints behind a line.
+func TestPresetsKeepTextReadableOnTints(t *testing.T) {
+	for _, name := range ThemeNames() {
+		th, _ := ThemeByName(name)
 		if contrast(th.Fg, th.Bg) < 0.35 {
 			t.Errorf("theme %s: code text has too little contrast against the surface", th.Name)
 		}
 		for _, tint := range []string{th.AddBg, th.DelBg, th.AddBgFocus, th.DelBgFocus, th.CursorBg} {
 			if contrast(th.Fg, tint) < 0.3 {
 				t.Errorf("theme %s: text on tint %s is too close in tone", th.Name, tint)
+			}
+		}
+	}
+}
+
+// The picker lists every preset exactly once, grouped by the surface it sets
+// and then by whether it leans on red and green, alphabetical within a group.
+func TestThemeGroups(t *testing.T) {
+	want := []ThemeGroup{
+		{"dark", []string{"dark", "dracula", "gruvbox-dark", "high-contrast", "nord", "tokyonight"}},
+		{"light", []string{"light", "solarized-light"}},
+		{"colour-blind", []string{"dark-cb", "light-cb"}},
+	}
+	if got := ThemeGroups(); !reflect.DeepEqual(got, want) {
+		t.Errorf("ThemeGroups() = %v\nwant %v", got, want)
+	}
+	seen := map[string]bool{}
+	for _, g := range ThemeGroups() {
+		for _, n := range g.Names {
+			seen[n] = true
+		}
+	}
+	for _, n := range ThemeNames() {
+		if !seen[n] {
+			t.Errorf("preset %s is in no group, so the picker cannot offer it", n)
+		}
+	}
+}
+
+// Presets named after a chroma style take over that name: they highlight with
+// the style they are named for, so a configuration that meant the style gets
+// the full theme around it.
+func TestPresetsNamedForAStyleUseIt(t *testing.T) {
+	for _, name := range ThemeNames() {
+		th, _ := ThemeByName(name)
+		if KnownSyntax(name) && th.Syntax != name {
+			t.Errorf("theme %s shadows the chroma style of that name but highlights with %s", name, th.Syntax)
+		}
+	}
+}
+
+// The colour-blind presets mark changes in blue and orange, the pair that
+// survives red-green colour blindness.
+func TestColourBlindPresetsAvoidRedAndGreen(t *testing.T) {
+	for _, name := range []string{"dark-cb", "light-cb"} {
+		th, _ := ThemeByName(name)
+		for _, c := range []string{th.AddSign, th.AddEdge, th.AddWordBg} {
+			r, g, b, _ := parseHex(c)
+			if b <= r || b <= g {
+				t.Errorf("theme %s: add colour %s is not blue", name, c)
+			}
+		}
+		for _, c := range []string{th.DelSign, th.DelEdge, th.DelWordBg} {
+			r, g, b, _ := parseHex(c)
+			if !(r > g && g > b) {
+				t.Errorf("theme %s: delete colour %s is not orange", name, c)
 			}
 		}
 	}
@@ -143,20 +205,4 @@ func TestPresetsSeparateAddAndDeleteWithoutColour(t *testing.T) {
 	if strings.TrimSpace(edgeChange) == "" {
 		t.Fatal("the edge marker is blank, leaving tint as the only cue")
 	}
-}
-
-func luminance(hex string) float64 {
-	r, g, b, ok := parseHex(hex)
-	if !ok {
-		return 0
-	}
-	return (0.2126*float64(r) + 0.7152*float64(g) + 0.0722*float64(b)) / 255
-}
-
-func contrast(a, b string) float64 {
-	d := luminance(a) - luminance(b)
-	if d < 0 {
-		return -d
-	}
-	return d
 }

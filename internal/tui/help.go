@@ -41,6 +41,7 @@ var helpContent = []helpSection{
 	}},
 	{title: "View", entries: []helpEntry{
 		{keys: "s", desc: "split or unified layout, for this session"},
+		{keys: "T", desc: "pick a colour theme; j/k previews, enter saves it"},
 		{keys: "f", desc: "file list"},
 		{keys: "x", desc: "mark this file reviewed, and move on"},
 		{keys: "enter", desc: "expand a thread, or open a comment in full"},

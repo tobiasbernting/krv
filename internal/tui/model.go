@@ -47,6 +47,9 @@ type Options struct {
 	FromQueue bool
 
 	Clipboard Clipboard
+
+	// SaveTheme writes the theme picked with T; nil is config.SaveTheme.
+	SaveTheme ThemeSaver
 }
 
 type Model struct {
@@ -56,6 +59,11 @@ type Model struct {
 	rend   *render.Renderer
 	theme  render.Theme
 	layout render.Layout
+	// themes and picker are T's theme picker; hls keeps one highlighter per
+	// syntax style, so previewing a theme does not re-lex the whole review.
+	themes themeSettings
+	picker themePicker
+	hls    map[string]*render.Highlighter
 	cfg    config.Config
 	src    Source
 
@@ -147,6 +155,7 @@ func New(opts Options) Model {
 		width:           80,
 		height:          24,
 		hl:              render.NewHighlighter(opts.Theme.Syntax, opts.Config.Color),
+		themes:          newThemeSettings(opts.Config, opts.SaveTheme),
 		expandedThreads: map[string]bool{},
 		newComments:     map[int64]bool{},
 		updatedComments: map[int64]bool{},
@@ -164,6 +173,7 @@ func New(opts Options) Model {
 	if opts.Source.FollowUp != nil {
 		m.threads = opts.Source.FollowUp.Threads
 	}
+	m.hls = map[string]*render.Highlighter{opts.Theme.Syntax: m.hl}
 	m.blobs = Blobs(opts.Files)
 	if m.review == nil {
 		m.review = &notes.Review{Files: map[string]notes.FileMark{}}
@@ -355,6 +365,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m.picker.open {
+		return m.handlePickerKey(key)
+	}
 
 	switch m.mode {
 	case modeReply:
@@ -389,6 +402,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.showCurrentDiff("")
 	case "?":
 		m.openHelp()
+	case "T":
+		m.openPicker()
 	case "f":
 		if len(m.doc.Rows) == 0 || len(m.doc.Files) == 0 {
 			m.err = "no files"
@@ -492,6 +507,8 @@ func (m Model) handleFilesKey(key string) (tea.Model, tea.Cmd) {
 		return m.leave(key)
 	case "esc", "f":
 		m.mode = modeDiff
+	case "T":
+		m.openPicker()
 	case "j", "down":
 		if m.fileCursor < len(m.doc.Files)-1 {
 			m.fileCursor++
@@ -632,6 +649,13 @@ func (m *Model) clampScroll() {
 }
 
 func (m Model) View() string {
+	if m.picker.open {
+		return m.picker.overlay(m.view(), m.theme, m.width, m.height)
+	}
+	return m.view()
+}
+
+func (m Model) view() string {
 	switch m.mode {
 	case modeHelp:
 		return m.helpView()
@@ -737,6 +761,9 @@ func (m Model) statusBar() string {
 // review progresses, and every screen below the diff ends with the way back,
 // so no view is a dead end.
 func (m Model) hintKeys() []string {
+	if m.picker.open {
+		return []string{pickerHint, "esc cancel"}
+	}
 	switch m.mode {
 	case modeThreads:
 		return []string{
