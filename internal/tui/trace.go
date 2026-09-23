@@ -224,6 +224,6 @@ func sampleTrace(now time.Time) traceLog {
 	step(2, "diff", "g2", "gh pr diff 42 --repo acme/app", 1100*time.Millisecond)
 	step(3, "threads", "g3", "gh api graphql -f query=…", 900*time.Millisecond)
 	step(4, "compare trees", "g4", "gh api repos/acme/app/git/trees/3f9a2c1?recursive=1", 400*time.Millisecond)
-	step(5, "compare files 7/23", "g5", "gh api repos/acme/app/git/blobs/9fe1b07", 0)
+	step(5, "file versions 7/23", "g5", "gh api repos/acme/app/git/blobs/9fe1b07", 0)
 	return l
 }

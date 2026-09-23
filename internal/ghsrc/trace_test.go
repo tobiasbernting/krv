@@ -3,6 +3,7 @@ package ghsrc
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -57,9 +58,14 @@ func TestTraceNamesEachStepOfASnapshot(t *testing.T) {
 	if _, err := client.Snapshot("acme/x", 1); err != nil {
 		t.Fatal(err)
 	}
+	// Diff and threads run side by side, so only their set is fixed.
+	got := rec.steps()
+	for _, span := range [][2]int{{1, 4}, {7, 10}} {
+		sort.Strings(got[span[0]:span[1]])
+	}
 	pass := []string{"pull request", "diff", "threads", "threads", "recheck head"}
 	want := append(append(append([]string{}, pass...), "head moved — retrying"), pass...)
-	if got := rec.steps(); strings.Join(got, ",") != strings.Join(want, ",") {
+	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("steps = %q\nwant    %q", got, want)
 	}
 
@@ -127,19 +133,20 @@ func TestTraceCountsComparedFilesOnOneLine(t *testing.T) {
 			continue
 		}
 		prefix := ev.Step
-		if strings.HasPrefix(ev.Step, "compare files ") {
-			prefix = "compare files"
-			counts = append(counts, strings.TrimPrefix(ev.Step, "compare files "))
+		if strings.HasPrefix(ev.Step, "file versions ") {
+			prefix = "file versions"
+			counts = append(counts, strings.TrimPrefix(ev.Step, "file versions "))
 		}
 		if g, ok := groups[prefix]; ok && g != ev.Group {
 			t.Errorf("%s split over lines %s and %s", prefix, g, ev.Group)
 		}
 		groups[prefix] = ev.Group
 	}
+	sort.Strings(counts) // fetched side by side
 	if strings.Join(counts, ",") != "1/4,2/4,3/4,4/4" {
 		t.Errorf("blob counts = %v, want 1/4 … 4/4", counts)
 	}
-	for _, step := range []string{"compare trees", "compare files", "build compare"} {
+	for _, step := range []string{"compare trees", "file versions", "build compare"} {
 		if groups[step] == "" {
 			t.Errorf("no %q line", step)
 		}

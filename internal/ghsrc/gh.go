@@ -15,6 +15,7 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // ErrNotInstalled is returned when gh is missing, so callers can tell the
@@ -42,6 +43,12 @@ type Client struct {
 	Trace *Tracer
 	// step and group label the commands run, set by traced.
 	step, group string
+	// Blobs, when set, keeps the file versions comparisons fetch, so later
+	// review rounds and reopened pull requests fetch only what is new.
+	Blobs *BlobCache
+
+	// throttle paces the calls of one load after a rate limit.
+	throttle *throttle
 }
 
 // Preflight checks that gh exists and is authenticated. It is called once per
@@ -262,7 +269,29 @@ func (c Client) submitReview(repo string, number int, headSHA, event, body strin
 
 func (c Client) run(args ...string) (string, error) { return c.runInput(nil, args...) }
 
-func (c Client) runInput(stdin []byte, args ...string) (_ string, err error) {
+// runInput runs gh, waiting out a rate limit and retrying when GitHub asks
+// for that, so a burst of fetches slows down instead of failing the load.
+func (c Client) runInput(stdin []byte, args ...string) (string, error) {
+	for attempt := 0; ; attempt++ {
+		release := c.throttle.acquire()
+		out, err := c.runOnce(stdin, args...)
+		release()
+		wait, retry, final := c.rateLimitWait(err, attempt)
+		if final != nil {
+			return "", final
+		}
+		if !retry {
+			return out, err
+		}
+		c.throttle.hold(wait)
+		id := c.Trace.start("rate limited", c.Trace.group(), "waiting", []string{wait.Round(time.Second).String(), "before retrying"})
+		sleep(wait)
+		c.Trace.end(id, nil)
+	}
+}
+
+// runOnce runs gh once.
+func (c Client) runOnce(stdin []byte, args ...string) (_ string, err error) {
 	id := c.Trace.start(c.step, c.group, "gh", args)
 	defer func() { c.Trace.end(id, err) }()
 	if c.runOverride != nil {

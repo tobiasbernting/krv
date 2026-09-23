@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 // RevisionComparison compares two immutable snapshots, even when a force push
@@ -49,16 +52,26 @@ func (c Client) CompareRevisions(repo, baseSHA, headSHA string) (*RevisionCompar
 		return nil, fmt.Errorf("revision comparison requires full immutable commit IDs")
 	}
 	trees := c.traced("compare trees")
-	base, err := trees.revisionTree(repo, baseSHA)
-	if err != nil {
-		return nil, fmt.Errorf("review baseline %s unavailable: %w", baseSHA, err)
-	}
-	head := base
+	var base, head map[string]revisionEntry
+	var baseErr, headErr error
+	var wg sync.WaitGroup
 	if baseSHA != headSHA {
-		head, err = trees.revisionTree(repo, headSHA)
-		if err != nil {
-			return nil, fmt.Errorf("review head %s unavailable: %w", headSHA, err)
-		}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			head, headErr = trees.revisionTree(repo, headSHA)
+		}()
+	}
+	base, baseErr = trees.revisionTree(repo, baseSHA)
+	wg.Wait()
+	if baseErr != nil {
+		return nil, fmt.Errorf("review baseline %s unavailable: %w", baseSHA, baseErr)
+	}
+	if headErr != nil {
+		return nil, fmt.Errorf("review head %s unavailable: %w", headSHA, headErr)
+	}
+	if baseSHA == headSHA {
+		head = base
 	}
 	result := &RevisionComparison{BaseSHA: baseSHA, HeadSHA: headSHA,
 		BaseFiles: make(map[string]string, len(base)), HeadFiles: make(map[string]string, len(head))}
@@ -98,20 +111,8 @@ func (c Client) CompareRevisions(repo, baseSHA, headSHA string) (*RevisionCompar
 			listed[entry.SHA] = true
 		}
 	}
-	files := c.traced("compare files")
-	for k, entry := range blobs {
-		label := fmt.Sprintf("compare files %d/%d", k+1, len(blobs))
-		data, err := files.relabel(label).revisionBlob(repo, entry.SHA)
-		if err != nil {
-			return nil, fmt.Errorf("cannot compare %q: %w", entry.Path, err)
-		}
-		id, err := git.run(data, "hash-object", "-w", "--stdin")
-		if err != nil {
-			return nil, err
-		}
-		if strings.TrimSpace(id) != entry.SHA {
-			return nil, fmt.Errorf("cannot compare %q: downloaded blob does not match %s", entry.Path, entry.SHA)
-		}
+	if err := c.loadBlobs(repo, git, blobs); err != nil {
+		return nil, err
 	}
 	oldTree, err := git.tree(oldChanged)
 	if err != nil {
@@ -135,6 +136,71 @@ func (c Client) CompareRevisions(repo, baseSHA, headSHA string) (*RevisionCompar
 		return nil, err
 	}
 	return result, nil
+}
+
+// fetchWorkers is how many versions are fetched at once: enough to hide
+// each call's latency, well under GitHub's limits on requests in flight.
+const fetchWorkers = 8
+
+// loadBlobs puts every version in blobs into git's object store: from the
+// cache where it has them, fetched side by side where it does not. Every
+// version is checked against its id before git or the cache sees it.
+func (c Client) loadBlobs(repo string, git revisionGit, blobs []revisionEntry) error {
+	data := make([][]byte, len(blobs))
+	var missing []int
+	for i, entry := range blobs {
+		if cached, ok := c.Blobs.get(entry.SHA); ok {
+			data[i] = cached
+			continue
+		}
+		missing = append(missing, i)
+	}
+	if hit := len(blobs) - len(missing); hit > 0 {
+		c.Trace.Mark(fmt.Sprintf("file versions: %d of %d cached", hit, len(blobs)))
+	}
+
+	fetch := c.traced("file versions")
+	errs := make([]error, len(blobs))
+	var failed atomic.Bool
+	var started atomic.Int64
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for range min(fetchWorkers, len(missing)) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				if failed.Load() {
+					continue
+				}
+				entry := blobs[i]
+				k := started.Add(1)
+				label := fmt.Sprintf("file versions %d/%d", k, len(missing))
+				got, err := fetch.relabel(label).revisionBlob(repo, entry.SHA)
+				if err == nil && blobID(got) != entry.SHA {
+					err = fmt.Errorf("downloaded blob does not match %s", entry.SHA)
+				}
+				if err != nil {
+					errs[i] = fmt.Errorf("cannot compare %q: %w", entry.Path, err)
+					failed.Store(true)
+					continue
+				}
+				c.Blobs.put(entry.SHA, got)
+				data[i] = got
+			}
+		}()
+	}
+	for _, i := range missing {
+		jobs <- i
+	}
+	close(jobs)
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return git.writeBlobs(blobs, data)
 }
 
 func revisionObjectID(id string) bool {
@@ -245,6 +311,39 @@ func (g revisionGit) run(input []byte, args ...string) (_ string, err error) {
 		return "", fmt.Errorf("cannot construct revision comparison: git %s: %w: %s", args[0], err, strings.TrimSpace(stderr.String()))
 	}
 	return out.String(), nil
+}
+
+// writeBlobs stores every version with one git process rather than one
+// each. Paths are only where the bytes wait; --no-filters keeps git from
+// reading them as worktree files with attributes to apply.
+func (g revisionGit) writeBlobs(blobs []revisionEntry, data [][]byte) error {
+	if len(blobs) == 0 {
+		return nil
+	}
+	incoming, err := os.MkdirTemp("", "krv-blobs-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(incoming)
+	var paths strings.Builder
+	for i, entry := range blobs {
+		path := filepath.Join(incoming, entry.SHA)
+		if err := os.WriteFile(path, data[i], 0o600); err != nil {
+			return err
+		}
+		paths.WriteString(path + "\n")
+	}
+	out, err := g.run([]byte(paths.String()), "hash-object", "-w", "--no-filters", "--stdin-paths")
+	if err != nil {
+		return err
+	}
+	ids := strings.Fields(out)
+	for i, entry := range blobs {
+		if i >= len(ids) || ids[i] != entry.SHA {
+			return fmt.Errorf("cannot compare %q: stored blob does not match %s", entry.Path, entry.SHA)
+		}
+	}
+	return nil
 }
 
 func (g revisionGit) tree(entries map[string]revisionEntry) (string, error) {

@@ -426,7 +426,7 @@ func printQueue(client ghsrc.Client, limit int) error {
 // another repository than the working directory, so the client is pointed at
 // that repository by name rather than by path.
 func queuedReview(repo *gitsrc.Repo, cfg config.Config, name string, number int, trace *ghsrc.Tracer) (tui.Options, error) {
-	client := ghsrc.Client{Host: cfg.Host, Dir: repo.Root, Repo: name, Trace: trace}
+	client := ghsrc.Client{Host: cfg.Host, Dir: repo.Root, Repo: name, Trace: trace, Blobs: blobCache()}
 
 	src, files, err := loadPR(client, name, number)
 	if err != nil {
@@ -468,8 +468,18 @@ func resolve(repo *gitsrc.Repo, cfg config.Config, target string) (tui.Source, [
 	return tui.Source{Kind: tui.SourceLocal, Title: target, Root: repo.Root, Rev: head, FileText: repo.NewSide(target)}, files, err
 }
 
+// blobCache is where comparisons keep the file versions they fetch. Without
+// a config directory there is no cache, only slower comparisons.
+func blobCache() *ghsrc.BlobCache {
+	dir, err := config.Dir()
+	if err != nil {
+		return nil
+	}
+	return ghsrc.NewBlobCache(filepath.Join(dir, "blobs"))
+}
+
 func resolvePR(repo *gitsrc.Repo, cfg config.Config, number int) (tui.Source, []*diffparse.FileDiff, error) {
-	client := ghsrc.Client{Host: cfg.Host, Dir: repo.Root}
+	client := ghsrc.Client{Host: cfg.Host, Dir: repo.Root, Blobs: blobCache()}
 	if err := client.Preflight(); err != nil {
 		if errors.Is(err, ghsrc.ErrNotInstalled) {
 			return tui.Source{}, nil, fmt.Errorf("%w\n\nlocal reviews (krv . and krv <range>) work without it", err)
