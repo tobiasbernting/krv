@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.0](https://github.com/tobiasbernting/krv/compare/v2.6.0...v2.7.0) (2026-09-23)
+
+
+### Features
+
+* load pull requests faster, and wait out GitHub's rate limits ([#46](https://github.com/tobiasbernting/krv/issues/46)) ([c562b7a](https://github.com/tobiasbernting/krv/commit/c562b7ac12817f199ba9999cf7d9a109a8276297))
+
 ## [2.6.0](https://github.com/tobiasbernting/krv/compare/v2.5.0...v2.6.0) (2026-09-23)
 
 
